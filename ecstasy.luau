@@ -311,31 +311,47 @@ function Ecstasy:Notify(o)
 		Parent = NHolder
 	})
 
-	local card = create("Frame", {
+	local card = create("CanvasGroup", {
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Theme.Surface,
-		BackgroundTransparency = 0.08,
+		BackgroundTransparency = 0.06,
 		BorderSizePixel = 0,
-		ClipsDescendants = true,
 		Parent = wrapper
 	})
-	corner(card, UDim.new(0, 12))
-	stroke(card, Theme.Stroke, 0.92, 1)
-	pad(card, 14, 14, 12, 14)
+	corner(card, UDim.new(0, 14))
+	stroke(card, Theme.Stroke, 0.94, 1)
 
-	local accent = create("Frame", {
-		Size = UDim2.new(0, 3, 1, -4),
-		Position = UDim2.fromOffset(0, 2),
-		BackgroundColor3 = Theme.Accent,
-		BorderSizePixel = 0,
+	local inner = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
 		Parent = card
 	})
-	corner(accent, UDim.new(0, 2))
+	pad(inner, 16, 16, 14, 16)
+
+	create("Frame", {
+		Size = UDim2.new(0, 3, 1, 0),
+		BackgroundColor3 = Theme.Accent,
+		BorderSizePixel = 0,
+		Parent = inner
+	})
+
+	local textCol = create("Frame", {
+		Size = UDim2.new(1, -14, 0, 0),
+		Position = UDim2.fromOffset(14, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = inner
+	})
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 4),
+		Parent = textCol
+	})
 
 	create("TextLabel", {
-		Size = UDim2.new(1, -10, 0, 16),
-		Position = UDim2.fromOffset(10, 0),
+		Size = UDim2.new(1, 0, 0, 16),
 		BackgroundTransparency = 1,
 		Text = title,
 		TextColor3 = Theme.Text,
@@ -343,14 +359,13 @@ function Ecstasy:Notify(o)
 		FontFace = FontSemi,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
-		Parent = card
+		Parent = textCol
 	})
 
 	if content ~= "" then
 		create("TextLabel", {
-			Size = UDim2.new(1, -10, 0, 0),
+			Size = UDim2.new(1, 0, 0, 0),
 			AutomaticSize = Enum.AutomaticSize.Y,
-			Position = UDim2.fromOffset(10, 18),
 			BackgroundTransparency = 1,
 			Text = content,
 			TextColor3 = Theme.Muted,
@@ -358,16 +373,14 @@ function Ecstasy:Notify(o)
 			FontFace = FontRegular,
 			TextWrapped = true,
 			TextXAlignment = Enum.TextXAlignment.Left,
-			Parent = card
+			Parent = textCol
 		})
 	end
 
 	local progTrack = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 2),
-		Position = UDim2.new(0, 0, 1, 0),
-		AnchorPoint = Vector2.new(0, 1),
-		BackgroundColor3 = Color3.fromRGB(40, 40, 55),
-		BackgroundTransparency = 0.4,
+		BackgroundColor3 = Color3.fromRGB(35, 35, 48),
+		BackgroundTransparency = 0.3,
 		BorderSizePixel = 0,
 		Parent = card
 	})
@@ -378,17 +391,21 @@ function Ecstasy:Notify(o)
 		Parent = progTrack
 	})
 
-	wrapper.Position = UDim2.new(1, 40, 0, 0)
-	card.BackgroundTransparency = 1
-	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.4, Enum.EasingStyle.Quint)
-	tween(card, { BackgroundTransparency = 0.08 }, 0.35, Enum.EasingStyle.Quint)
+	local scale = create("UIScale", { Scale = 0.92, Parent = card })
+	wrapper.Position = UDim2.new(1, 30, 0, 0)
+	card.GroupTransparency = 1
+
+	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.38, Enum.EasingStyle.Quint)
+	tween(card, { GroupTransparency = 0 }, 0.35, Enum.EasingStyle.Quint)
+	tween(scale, { Scale = 1 }, 0.38, Enum.EasingStyle.Quint)
 	tween(prog, { Size = UDim2.fromScale(0, 1) }, duration, Enum.EasingStyle.Linear)
 
 	task.delay(duration, function()
 		if not wrapper.Parent then return end
-		tween(wrapper, { Position = UDim2.new(1, 50, 0, 0) }, 0.3, Enum.EasingStyle.Quint)
-		tween(card, { BackgroundTransparency = 1 }, 0.28)
-		task.wait(0.32)
+		tween(wrapper, { Position = UDim2.new(1, 40, 0, 0) }, 0.28, Enum.EasingStyle.Quint)
+		tween(card, { GroupTransparency = 1 }, 0.26)
+		tween(scale, { Scale = 0.94 }, 0.26)
+		task.wait(0.3)
 		if wrapper.Parent then wrapper:Destroy() end
 	end)
 end
@@ -588,25 +605,32 @@ function Ecstasy:CreateWindow(opts)
 		Parent = glowHost
 	})
 
-	local main = create("Frame", {
-		Name = "Main",
+	local mainShell = create("Frame", {
+		Name = "MainShell",
 		Size = win.Size,
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = theme.Background,
-		BackgroundTransparency = 0.04 + Ecstasy.GlassTransparency,
-		BorderSizePixel = 0,
-		ClipsDescendants = true,
+		BackgroundTransparency = 1,
 		Visible = false,
 		ZIndex = 2,
 		Parent = gui
 	})
+	local mainScale = create("UIScale", { Scale = 1, Parent = mainShell })
+	win._mainScale = mainScale
+
+	local main = create("CanvasGroup", {
+		Name = "Main",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = theme.Background,
+		BackgroundTransparency = 0.04 + Ecstasy.GlassTransparency,
+		BorderSizePixel = 0,
+		Parent = mainShell
+	})
 	win.Main = main
+	win.MainShell = mainShell
 	corner(main, UDim.new(0, 16))
 	stroke(main, theme.Stroke, 0.82)
 	Ecstasy:RegisterGlass(main, 0.04)
-	local mainScale = create("UIScale", { Scale = 1, Parent = main })
-	win._mainScale = mainScale
 
 	local top = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 58),
@@ -712,15 +736,15 @@ function Ecstasy:CreateWindow(opts)
 	win.Content = content
 
 	local dragging, dragStart, startPos, targetPos, currentPos =
-		false, Vector2.zero, main.Position, main.Position, main.Position
+		false, Vector2.zero, mainShell.Position, mainShell.Position, mainShell.Position
 
 	win.Maid:Conn(top.InputBegan:Connect(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
 			dragging = true
 			dragStart = Vector2.new(inp.Position.X, inp.Position.Y)
-			startPos = main.Position
-			currentPos = main.Position
-			targetPos = main.Position
+			startPos = mainShell.Position
+			currentPos = mainShell.Position
+			targetPos = mainShell.Position
 		end
 	end))
 	win.Maid:Conn(UserInputService.InputChanged:Connect(function(inp)
@@ -735,14 +759,14 @@ function Ecstasy:CreateWindow(opts)
 		end
 	end))
 	win.Maid:Conn(RunService.RenderStepped:Connect(function(dt)
-		if not main.Parent then return end
+		if not mainShell.Parent then return end
 		local a = math.clamp(dt * 18, 0, 1)
 		local x = currentPos.X.Offset + (targetPos.X.Offset - currentPos.X.Offset) * a
 		local y = currentPos.Y.Offset + (targetPos.Y.Offset - currentPos.Y.Offset) * a
 		currentPos = UDim2.new(targetPos.X.Scale, x, targetPos.Y.Scale, y)
-		main.Position = currentPos
+		mainShell.Position = currentPos
 		glowHost.Position = currentPos
-		glowHost.Size = main.Size
+		glowHost.Size = mainShell.Size
 	end))
 
 	win.Maid:Conn(UserInputService.InputBegan:Connect(function(inp, gp)
@@ -761,7 +785,7 @@ function Ecstasy:CreateWindow(opts)
 	end
 
 	playLoading(gui, theme, function()
-		main.Visible = true
+		mainShell.Visible = true
 		glowHost.Visible = true
 		mainScale.Scale = 0.92
 		main.BackgroundTransparency = 1
@@ -781,11 +805,12 @@ function Window:Toggle()
 	self._toggling = true
 	self.Visible = not self.Visible
 	local m = self.Main
+	local shell = self.MainShell
 	local g = self.GlowHost
 	local s = self._mainScale
 
 	if self.Visible then
-		m.Visible = true
+		if shell then shell.Visible = true end
 		if g then g.Visible = true end
 		s.Scale = 0.94
 		m.BackgroundTransparency = 1
@@ -799,7 +824,7 @@ function Window:Toggle()
 		if self._blur then tween(self._blur, { Size = 0 }, 0.25) end
 		task.delay(0.3, function()
 			if not self.Visible then
-				m.Visible = false
+				if shell then shell.Visible = false end
 				if g then g.Visible = false end
 			end
 			self._toggling = false
@@ -1190,17 +1215,38 @@ function Section:CreateDropdown(opts)
 	})
 
 	local selected = def
+	local chip = create("Frame", {
+		Size = UDim2.fromOffset(0, 28),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.new(1, -14, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = th.Surface3,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		Parent = c
+	})
+	corner(chip, UDim.new(0, 8))
+	stroke(chip, th.Stroke, 0.9)
+	pad(chip, 10, 10, 0, 0)
 	local disp = create("TextLabel", {
-		Size = UDim2.new(0.52, -14, 1, 0), Position = UDim2.new(0.48, 0, 0, 0),
-		BackgroundTransparency = 1, Text = tostring(selected), TextColor3 = th.Muted,
-		TextSize = 12, FontFace = FontRegular, TextXAlignment = Enum.TextXAlignment.Right,
-		TextTruncate = Enum.TextTruncate.AtEnd, Parent = c
+		Size = UDim2.fromOffset(0, 28),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundTransparency = 1,
+		Text = tostring(selected),
+		TextColor3 = th.Accent,
+		TextSize = 12,
+		FontFace = FontMedium,
+		Parent = chip
 	})
 
-	local open, drop = false, nil
+	local open, drop, dropScale = false, nil, nil
 	local function close()
-		if drop then drop:Destroy() drop = nil end
-		open = false
+		if not drop then return end
+		local d, s = drop, dropScale
+		drop, dropScale, open = nil, nil, false
+		if s then tween(s, { Scale = 0.94 }, 0.15) end
+		tween(d, { GroupTransparency = 1 }, 0.15)
+		task.delay(0.16, function() if d and d.Parent then d:Destroy() end end)
 	end
 
 	create("TextButton", {
@@ -1209,31 +1255,64 @@ function Section:CreateDropdown(opts)
 		Ecstasy:PlayClick()
 		if open then close() return end
 		open = true
-		drop = create("Frame", {
-			Size = UDim2.new(1, 0, 0, math.min(#options * 32 + 10, 170)),
-			Position = UDim2.new(0, 0, 1, 6),
+		local h = math.min(#options * 34 + 12, 180)
+		drop = create("CanvasGroup", {
+			Size = UDim2.new(1, 0, 0, h),
+			Position = UDim2.new(0, 0, 1, 8),
 			BackgroundColor3 = th.Surface,
-			BackgroundTransparency = 0.05,
-			BorderSizePixel = 0, ZIndex = 90, Parent = c
+			BackgroundTransparency = 0.04,
+			BorderSizePixel = 0,
+			GroupTransparency = 1,
+			ZIndex = 100,
+			Parent = c
 		})
-		corner(drop, UDim.new(0, 10))
-		stroke(drop, th.Stroke, 0.88)
+		corner(drop, UDim.new(0, 12))
+		stroke(drop, th.Stroke, 0.9)
+		dropScale = create("UIScale", { Scale = 0.94, Parent = drop })
+
 		local sc = create("ScrollingFrame", {
-			Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
-			ScrollBarThickness = 2, CanvasSize = UDim2.new(0, 0, 0, #options * 32), Parent = drop
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			ScrollBarThickness = 2,
+			ScrollBarImageColor3 = th.Accent,
+			CanvasSize = UDim2.new(0, 0, 0, #options * 34),
+			Parent = drop
 		})
-		create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Parent = sc })
-		pad(sc, 5, 5, 5, 5)
+		create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = sc })
+		pad(sc, 6, 6, 6, 6)
+
 		for _, opt in ipairs(options) do
+			local isSel = tostring(opt) == tostring(selected)
 			local b = create("TextButton", {
-				Size = UDim2.new(1, 0, 0, 28), BackgroundColor3 = th.Surface2,
-				BackgroundTransparency = 1, Text = "  " .. tostring(opt), TextColor3 = th.Text,
-				TextSize = 12, FontFace = FontRegular, TextXAlignment = Enum.TextXAlignment.Left,
-				AutoButtonColor = false, Parent = sc
+				Size = UDim2.new(1, 0, 0, 30),
+				BackgroundColor3 = th.Surface2,
+				BackgroundTransparency = isSel and 0.55 or 1,
+				Text = "",
+				AutoButtonColor = false,
+				Parent = sc
 			})
-			corner(b, UDim.new(0, 7))
-			b.MouseEnter:Connect(function() tween(b, { BackgroundTransparency = 0.45 }, 0.12) end)
-			b.MouseLeave:Connect(function() tween(b, { BackgroundTransparency = 1 }, 0.15) end)
+			corner(b, UDim.new(0, 8))
+			local t = create("TextLabel", {
+				Size = UDim2.new(1, -12, 1, 0),
+				Position = UDim2.fromOffset(12, 0),
+				BackgroundTransparency = 1,
+				Text = tostring(opt),
+				TextColor3 = isSel and th.Accent or th.Text,
+				TextSize = 12,
+				FontFace = isSel and FontMedium or FontRegular,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Parent = b
+			})
+			b.MouseEnter:Connect(function()
+				tween(b, { BackgroundTransparency = 0.5 }, 0.12)
+				tween(t, { TextColor3 = th.Accent }, 0.12)
+			end)
+			b.MouseLeave:Connect(function()
+				local sel = tostring(opt) == tostring(selected)
+				tween(b, { BackgroundTransparency = sel and 0.55 or 1 }, 0.15)
+				tween(t, { TextColor3 = sel and th.Accent or th.Text }, 0.15)
+			end)
 			b.MouseButton1Click:Connect(function()
 				selected = opt
 				disp.Text = tostring(opt)
@@ -1241,6 +1320,9 @@ function Section:CreateDropdown(opts)
 				close()
 			end)
 		end
+
+		tween(drop, { GroupTransparency = 0 }, 0.2, Enum.EasingStyle.Quint)
+		tween(dropScale, { Scale = 1 }, 0.22, Enum.EasingStyle.Quint)
 	end)
 
 	return { Set = function(_, v) selected = v disp.Text = tostring(v) end, Get = function() return selected end }
