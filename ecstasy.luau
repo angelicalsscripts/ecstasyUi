@@ -797,6 +797,11 @@ function Ecstasy:CreateWindow(opts)
 	end)
 
 	table.insert(Ecstasy.Windows, win)
+	if opts.Settings ~= false then
+		task.defer(function()
+			win:CreateSettingsTab()
+		end)
+	end
 	return win
 end
 
@@ -1206,6 +1211,7 @@ function Section:CreateDropdown(opts)
 	local def = opts.Default or options[1]
 	local cb = opts.Callback
 	local th = self.Theme
+	local win = self.Window
 	local c = el(self, 46)
 
 	create("TextLabel", {
@@ -1239,36 +1245,44 @@ function Section:CreateDropdown(opts)
 		Parent = chip
 	})
 
-	local open, drop, dropScale = false, nil, nil
+	local open, drop, dropScale, outsideConn = false, nil, nil, nil
+
 	local function close()
-		if not drop then return end
+		if outsideConn then outsideConn:Disconnect() outsideConn = nil end
+		if not drop then open = false return end
 		local d, s = drop, dropScale
 		drop, dropScale, open = nil, nil, false
-		if s then tween(s, { Scale = 0.94 }, 0.15) end
-		tween(d, { GroupTransparency = 1 }, 0.15)
-		task.delay(0.16, function() if d and d.Parent then d:Destroy() end end)
+		if s then tween(s, { Scale = 0.96 }, 0.12) end
+		if d:IsA("CanvasGroup") then
+			tween(d, { GroupTransparency = 1 }, 0.12)
+		else
+			tween(d, { BackgroundTransparency = 1 }, 0.12)
+		end
+		task.delay(0.14, function() if d and d.Parent then d:Destroy() end end)
 	end
 
-	create("TextButton", {
-		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Parent = c
-	}).MouseButton1Click:Connect(function()
-		Ecstasy:PlayClick()
+	local function openMenu()
 		if open then close() return end
 		open = true
-		local h = math.min(#options * 34 + 12, 180)
+		local host = win.Gui
+		local absPos = c.AbsolutePosition
+		local absSize = c.AbsoluteSize
+		local inset = GuiService:GetGuiInset()
+		local h = math.min(#options * 34 + 12, 190)
+
 		drop = create("CanvasGroup", {
-			Size = UDim2.new(1, 0, 0, h),
-			Position = UDim2.new(0, 0, 1, 8),
+			Size = UDim2.fromOffset(math.max(absSize.X, 160), h),
+			Position = UDim2.fromOffset(absPos.X - inset.X, absPos.Y - inset.Y + absSize.Y + 6),
 			BackgroundColor3 = th.Surface,
-			BackgroundTransparency = 0.04,
+			BackgroundTransparency = 0.02,
 			BorderSizePixel = 0,
 			GroupTransparency = 1,
-			ZIndex = 100,
-			Parent = c
+			ZIndex = 200,
+			Parent = host
 		})
 		corner(drop, UDim.new(0, 12))
-		stroke(drop, th.Stroke, 0.9)
-		dropScale = create("UIScale", { Scale = 0.94, Parent = drop })
+		stroke(drop, th.Stroke, 0.88)
+		dropScale = create("UIScale", { Scale = 0.96, Parent = drop })
 
 		local sc = create("ScrollingFrame", {
 			Size = UDim2.fromScale(1, 1),
@@ -1277,6 +1291,7 @@ function Section:CreateDropdown(opts)
 			ScrollBarThickness = 2,
 			ScrollBarImageColor3 = th.Accent,
 			CanvasSize = UDim2.new(0, 0, 0, #options * 34),
+			ZIndex = 201,
 			Parent = drop
 		})
 		create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = sc })
@@ -1287,9 +1302,10 @@ function Section:CreateDropdown(opts)
 			local b = create("TextButton", {
 				Size = UDim2.new(1, 0, 0, 30),
 				BackgroundColor3 = th.Surface2,
-				BackgroundTransparency = isSel and 0.55 or 1,
+				BackgroundTransparency = isSel and 0.5 or 1,
 				Text = "",
 				AutoButtonColor = false,
+				ZIndex = 202,
 				Parent = sc
 			})
 			corner(b, UDim.new(0, 8))
@@ -1302,15 +1318,16 @@ function Section:CreateDropdown(opts)
 				TextSize = 12,
 				FontFace = isSel and FontMedium or FontRegular,
 				TextXAlignment = Enum.TextXAlignment.Left,
+				ZIndex = 203,
 				Parent = b
 			})
 			b.MouseEnter:Connect(function()
-				tween(b, { BackgroundTransparency = 0.5 }, 0.12)
+				tween(b, { BackgroundTransparency = 0.45 }, 0.12)
 				tween(t, { TextColor3 = th.Accent }, 0.12)
 			end)
 			b.MouseLeave:Connect(function()
 				local sel = tostring(opt) == tostring(selected)
-				tween(b, { BackgroundTransparency = sel and 0.55 or 1 }, 0.15)
+				tween(b, { BackgroundTransparency = sel and 0.5 or 1 }, 0.15)
 				tween(t, { TextColor3 = sel and th.Accent or th.Text }, 0.15)
 			end)
 			b.MouseButton1Click:Connect(function()
@@ -1321,11 +1338,42 @@ function Section:CreateDropdown(opts)
 			end)
 		end
 
-		tween(drop, { GroupTransparency = 0 }, 0.2, Enum.EasingStyle.Quint)
-		tween(dropScale, { Scale = 1 }, 0.22, Enum.EasingStyle.Quint)
+		tween(drop, { GroupTransparency = 0 }, 0.18, Enum.EasingStyle.Quint)
+		tween(dropScale, { Scale = 1 }, 0.2, Enum.EasingStyle.Quint)
+
+		task.defer(function()
+			outsideConn = UserInputService.InputBegan:Connect(function(inp)
+				if not open then return end
+				if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+					local pos = inp.Position
+					local dp = drop.AbsolutePosition
+					local ds = drop.AbsoluteSize
+					local insideDrop = pos.X >= dp.X and pos.X <= dp.X + ds.X and pos.Y >= dp.Y and pos.Y <= dp.Y + ds.Y
+					local cp = c.AbsolutePosition
+					local cs = c.AbsoluteSize
+					local insideChip = pos.X >= cp.X and pos.X <= cp.X + cs.X and pos.Y >= cp.Y and pos.Y <= cp.Y + cs.Y
+					if not insideDrop and not insideChip then
+						close()
+					end
+				end
+			end)
+		end)
+	end
+
+	create("TextButton", {
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Parent = c
+	}).MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		openMenu()
 	end)
 
-	return { Set = function(_, v) selected = v disp.Text = tostring(v) end, Get = function() return selected end }
+	return {
+		Set = function(_, v) selected = v disp.Text = tostring(v) end,
+		Get = function() return selected end,
+		SetOptions = function(_, list)
+			options = list or options
+		end
+	}
 end
 
 function Section:CreateKeybind(opts)
@@ -1499,6 +1547,55 @@ function Section:CreateImage(opts)
 	}
 end
 
+function Section:CreateImageButton(opts)
+	opts = opts or {}
+	local image = opts.Image or opts.Icon or "rbxassetid://6031094678"
+	local h = opts.Height or 48
+	local cb = opts.Callback
+	local th = self.Theme
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, h),
+		BackgroundColor3 = th.Surface2,
+		BackgroundTransparency = 0.2,
+		BorderSizePixel = 0,
+		Parent = self.List
+	})
+	corner(c, UDim.new(0, 10))
+	stroke(c, th.Stroke, 0.92)
+	addHover(c)
+	Ecstasy:RegisterGlass(c, 0.2)
+	local img = create("ImageLabel", {
+		Size = UDim2.fromOffset(h - 16, h - 16),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundTransparency = 1,
+		Image = image,
+		ScaleType = Enum.ScaleType.Fit,
+		Parent = c
+	})
+	local label = create("TextLabel", {
+		Size = UDim2.new(1, -(h + 8), 1, 0),
+		Position = UDim2.fromOffset(h, 0),
+		BackgroundTransparency = 1,
+		Text = opts.Name or opts.Text or "Image Button",
+		TextColor3 = th.Text,
+		TextSize = 13,
+		FontFace = FontMedium,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = c
+	})
+	create("TextButton", {
+		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Parent = c
+	}).MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		safe(cb)
+	end)
+	return {
+		SetImage = function(_, id) img.Image = tostring(id) end,
+		SetText = function(_, t) label.Text = tostring(t) end
+	}
+end
+
 function Section:CreateDivider(opts)
 	local th = self.Theme
 	local c = create("Frame", {
@@ -1518,9 +1615,14 @@ function Section:CreateDivider(opts)
 end
 
 function Window:CreateSettingsTab()
+	if self._settingsTab then
+		return self._settingsTab
+	end
 	local tab = self:CreateTab({ Name = "Settings" })
+	self._settingsTab = tab
 	local left = tab:CreateSection({ Name = "Interface", Side = "Left" })
 	local right = tab:CreateSection({ Name = "Audio", Side = "Right" })
+	local extra = tab:CreateSection({ Name = "Config", Side = "Left" })
 
 	left:CreateKeybind({
 		Name = "Toggle UI",
@@ -1542,6 +1644,17 @@ function Window:CreateSettingsTab()
 			Ecstasy.GlassTransparency = v
 			Ecstasy:ApplyGlass()
 			saveConfig()
+		end
+	})
+
+	left:CreateToggle({
+		Name = "Background Blur",
+		Default = self.Blur == true,
+		Callback = function(v)
+			self.Blur = v
+			if self._blur then
+				tween(self._blur, { Size = v and (self.Visible and 12 or 0) or 0 }, 0.25)
+			end
 		end
 	})
 
@@ -1583,6 +1696,32 @@ function Window:CreateSettingsTab()
 			saveConfig()
 		end
 	})
+
+	extra:CreateButton({
+		Name = "Reset Config",
+		Callback = function()
+			Ecstasy.SoundEnabled = true
+			Ecstasy.ClickSounds = true
+			Ecstasy.NotifySounds = true
+			Ecstasy.SoundVolume = 0.22
+			Ecstasy.GlassTransparency = 0.12
+			Ecstasy.Keybind = Enum.KeyCode.RightControl
+			self.Keybind = Ecstasy.Keybind
+			Ecstasy:ApplyGlass()
+			saveConfig()
+			Ecstasy:Notify({ Title = "Settings", Content = "Config reset to defaults.", Duration = 3 })
+		end
+	})
+
+	extra:CreateButton({
+		Name = "Save Config Now",
+		Callback = function()
+			saveConfig()
+			Ecstasy:Notify({ Title = "Settings", Content = "Config saved.", Duration = 2 })
+		end
+	})
+
+	extra:CreateLabel({ Text = "Settings auto-save when changed." })
 
 	return tab
 end
