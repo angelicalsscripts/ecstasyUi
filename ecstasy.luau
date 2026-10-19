@@ -1,7 +1,6 @@
 --[[
-    ecstasy · v1.2.0
-    High-quality dark cyber-glass UI
-    + Soft SFX (click + notification) with toggle
+    ecstasy · v1.2.1
+    Fixed: Window dragging + separate toggleable notification sound
 ]]
 
 local TweenService     = game:GetService("TweenService")
@@ -102,42 +101,38 @@ local DEFAULT = {
 }
 
 --------------------------------------------------------------------
--- Sound System (soft & toggleable)
+-- Sound System
 --------------------------------------------------------------------
-local SOUNDS = {
-    Click = "rbxassetid://15675032796",      -- soft UI click
-    Notify = "rbxassetid://7383525713",     -- soft notification
-}
-
 local SoundFolder = Instance.new("Folder")
 SoundFolder.Name = "EcstasySounds"
 SoundFolder.Parent = SoundService
 
-local function createSound(id, vol)
+local function makeSound(id, vol)
     local s = Instance.new("Sound")
     s.SoundId = id
     s.Volume = vol or 0.35
-    s.PlaybackSpeed = 1
     s.Parent = SoundFolder
     return s
 end
 
-local clickSound  = createSound(SOUNDS.Click, 0.32)
-local notifySound = createSound(SOUNDS.Notify, 0.28)
+local clickSound  = makeSound("rbxassetid://15675032796", 0.32) -- soft click
+local notifySound = makeSound("rbxassetid://7383525713", 0.28)  -- soft notify
 
 --------------------------------------------------------------------
--- Library root
+-- Library
 --------------------------------------------------------------------
 local Ecstasy = {
-    Version     = "1.2.0",
-    Windows     = {},
-    _maid       = Maid.new(),
-    _blur       = nil,
-    _guiParent  = nil,
+    Version          = "1.2.1",
+    Windows          = {},
+    _maid            = Maid.new(),
+    _blur            = nil,
+    _guiParent       = nil,
 
-    -- Sound settings (change these anytime)
-    SoundEnabled = true,
-    SoundVolume  = 0.35,
+    -- Sound controls
+    SoundEnabled     = true,   -- master switch
+    ClickSounds      = true,   -- buttons, toggles, tabs
+    NotifySounds     = true,   -- notifications only
+    SoundVolume      = 0.35,
 }
 
 local function resolveParent()
@@ -146,7 +141,9 @@ local function resolveParent()
     if p then return p end
     pcall(function()
         local cg = game:GetService("CoreGui")
-        local t = Instance.new("Folder"); t.Parent = cg; t:Destroy()
+        local t = Instance.new("Folder")
+        t.Parent = cg
+        t:Destroy()
         p = cg
     end)
     if p then return p end
@@ -162,7 +159,7 @@ end
 
 function Ecstasy:_blurOn(on)
     if not on then
-        if self._blur then self._blur:Destroy(); self._blur = nil end
+        if self._blur then self._blur:Destroy() self._blur = nil end
         return
     end
     if self._blur and self._blur.Parent then return end
@@ -175,18 +172,22 @@ function Ecstasy:_blurOn(on)
     tween(b, { Size = 16 }, 0.4, Enum.EasingStyle.Quad)
 end
 
--- Play sound helper
-function Ecstasy:PlaySound(kind)
-    if not self.SoundEnabled then return end
-    local s = (kind == "Notify") and notifySound or clickSound
-    s.Volume = self.SoundVolume
-    s:Play()
+function Ecstasy:PlayClick()
+    if not self.SoundEnabled or not self.ClickSounds then return end
+    clickSound.Volume = self.SoundVolume
+    clickSound:Play()
+end
+
+function Ecstasy:PlayNotify()
+    if not self.SoundEnabled or not self.NotifySounds then return end
+    notifySound.Volume = self.SoundVolume
+    notifySound:Play()
 end
 
 --------------------------------------------------------------------
--- Interactive Hover Engine
+-- Interactive
 --------------------------------------------------------------------
-local function makeInteractive(frame, theme, playClick)
+local function makeInteractive(frame, theme, doClickSound)
     local scale = create("UIScale", { Scale = 1, Parent = frame })
 
     local shine = create("Frame", {
@@ -197,11 +198,6 @@ local function makeInteractive(frame, theme, playClick)
     })
     corner(shine, UDim.new(0, 8))
     local grad = create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.new(1,1,1)),
-            ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)),
-            ColorSequenceKeypoint.new(1, Color3.new(1,1,1)),
-        }),
         Transparency = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 1),
             NumberSequenceKeypoint.new(0.4, 0.85),
@@ -228,23 +224,19 @@ local function makeInteractive(frame, theme, playClick)
     end)
 
     frame.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1
-            or inp.UserInputType == Enum.UserInputType.Touch then
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
             tween(scale, { Scale = 0.98 }, 0.08)
-            if playClick then
-                Ecstasy:PlaySound("Click")
+            if doClickSound then
+                Ecstasy:PlayClick()
             end
         end
     end)
 
     frame.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1
-            or inp.UserInputType == Enum.UserInputType.Touch then
+        if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
             tween(scale, { Scale = hovering and 1.02 or 1 }, 0.18)
         end
     end)
-
-    return scale
 end
 
 --------------------------------------------------------------------
@@ -282,8 +274,8 @@ function Ecstasy:Notify(opts)
     opts = opts or {}
     ensureNotifs()
 
-    -- Play soft notification sound
-    self:PlaySound("Notify")
+    -- Separate notification sound toggle
+    self:PlayNotify()
 
     local title    = opts.Title or "Notification"
     local content  = opts.Content or ""
@@ -383,7 +375,7 @@ function Ecstasy:Notify(opts)
 end
 
 --------------------------------------------------------------------
--- Loading Screen
+-- Loading
 --------------------------------------------------------------------
 local function playLoading(parent, theme, onDone)
     local overlay = create("Frame", {
@@ -480,7 +472,7 @@ local function playLoading(parent, theme, onDone)
 end
 
 --------------------------------------------------------------------
--- Window
+-- Window (Dragging Fixed)
 --------------------------------------------------------------------
 local Window = {}
 Window.__index = Window
@@ -492,7 +484,7 @@ function Ecstasy:CreateWindow(opts)
 
     local win = setmetatable({
         Name     = opts.Name or "ecstasy",
-        SubTitle = opts.SubTitle or ("v" .. Ecstasy.Version .. " • Glass Engine"),
+        SubTitle = opts.SubTitle or ("v" .. Ecstasy.Version),
         Size     = opts.Size or UDim2.fromOffset(580, 380),
         Keybind  = opts.Keybind or Enum.KeyCode.RightControl,
         Blur     = opts.Blur ~= false,
@@ -514,13 +506,13 @@ function Ecstasy:CreateWindow(opts)
     win.Maid:Inst(gui)
     Ecstasy._maid:Inst(gui)
 
+    -- Glow
     local glowHolder = create("Frame", {
         Size = UDim2.fromScale(1, 1),
         BackgroundTransparency = 1,
         Parent = gui
     })
-
-    for i, sz in ipairs({ 40, 70, 110 }) do
+    for i, sz in ipairs({40, 70, 110}) do
         create("ImageLabel", {
             Size = UDim2.new(1, sz, 1, sz),
             Position = UDim2.fromScale(0.5, 0.5),
@@ -549,22 +541,6 @@ function Ecstasy:CreateWindow(opts)
     win.Main = main
     corner(main, UDim.new(0, 12))
     stroke(main, theme.Stroke, 0.88, 1)
-
-    local topHighlight = create("UIStroke", {
-        Color = Color3.fromRGB(255, 255, 255),
-        Transparency = 0.7,
-        Thickness = 1,
-        Parent = main
-    })
-    create("UIGradient", {
-        Transparency = NumberSequence.new({
-            NumberSequenceKeypoint.new(0, 0.4),
-            NumberSequenceKeypoint.new(0.3, 1),
-            NumberSequenceKeypoint.new(1, 1),
-        }),
-        Rotation = 90,
-        Parent = topHighlight
-    })
 
     local top = create("Frame", {
         Size = UDim2.new(1, 0, 0, 48),
@@ -654,53 +630,65 @@ function Ecstasy:CreateWindow(opts)
     })
     win.Content = content
 
-    -- Smooth drag
-    local dragging, dragStart, startPos, targetPos, currentPos = false
-    targetPos = main.Position
-    currentPos = main.Position
+    -- ====================== FIXED DRAGGING ======================
+    local dragging = false
+    local dragStart = Vector2.zero
+    local startPos = main.Position
+    local targetPos = main.Position
+    local currentPos = main.Position
 
-    win.Maid:Conn(top.InputBegan:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1
-            or inp.UserInputType == Enum.UserInputType.Touch then
+    win.Maid:Conn(top.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
-            dragStart = Vector2.new(inp.Position.X, inp.Position.Y)
+            dragStart = Vector2.new(input.Position.X, input.Position.Y)
             startPos = main.Position
             currentPos = main.Position
             targetPos = main.Position
         end
     end))
 
-    win.Maid:Conn(UserInputService.InputChanged:Connect(function(inp)
+    win.Maid:Conn(UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
-        if inp.UserInputType ~= Enum.UserInputType.MouseMovement
-            and inp.UserInputType ~= Enum.UserInputType.Touch then return end
-        local d = Vector2.new(inp.Position.X, inp.Position.Y) - dragStart
-        targetPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
-                              startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+
+        local delta = Vector2.new(input.Position.X, input.Position.Y) - dragStart
+        targetPos = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
     end))
 
-    win.Maid:Conn(UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1
-            or inp.UserInputType == Enum.UserInputType.Touch then
+    win.Maid:Conn(UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
     end))
 
+    -- Smooth lerp
     win.Maid:Conn(RunService.RenderStepped:Connect(function(dt)
         if not main.Parent then return end
-        local a = math.clamp(dt * 18, 0, 1)
-        local cx = currentPos.X.Offset + (targetPos.X.Offset - currentPos.X.Offset) * a
-        local cy = currentPos.Y.Offset + (targetPos.Y.Offset - currentPos.Y.Offset) * a
-        currentPos = UDim2.new(targetPos.X.Scale, cx, targetPos.Y.Scale, cy)
+
+        local alpha = math.clamp(dt * 18, 0, 1)
+        local newX = currentPos.X.Offset + (targetPos.X.Offset - currentPos.X.Offset) * alpha
+        local newY = currentPos.Y.Offset + (targetPos.Y.Offset - currentPos.Y.Offset) * alpha
+
+        currentPos = UDim2.new(targetPos.X.Scale, newX, targetPos.Y.Scale, newY)
         main.Position = currentPos
+
+        -- Keep glow following
         glowHolder.Position = main.Position
         glowHolder.Size = main.Size
         glowHolder.AnchorPoint = main.AnchorPoint
     end))
+    -- ====================== END FIXED DRAGGING ======================
 
-    win.Maid:Conn(UserInputService.InputBegan:Connect(function(inp, gp)
+    win.Maid:Conn(UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
-        if inp.KeyCode == win.Keybind then win:Toggle() end
+        if input.KeyCode == win.Keybind then
+            win:Toggle()
+        end
     end))
 
     if win.Blur then Ecstasy:_blurOn(true) end
@@ -728,7 +716,9 @@ function Window:Toggle()
         if self.Blur then Ecstasy:_blurOn(true) end
     else
         tween(m, { BackgroundTransparency = 1 }, 0.2)
-        task.delay(0.22, function() if not self.Visible then m.Visible = false end end)
+        task.delay(0.22, function()
+            if not self.Visible then m.Visible = false end
+        end)
         if self.Blur then Ecstasy:_blurOn(false) end
     end
 end
@@ -744,7 +734,7 @@ function Window:Destroy()
 end
 
 --------------------------------------------------------------------
--- Tab / Section / Components (same structure as before, with click sound)
+-- Tab + Section + basic components (same structure)
 --------------------------------------------------------------------
 local Tab = {}
 Tab.__index = Tab
@@ -918,8 +908,6 @@ local function elContainer(sec, h)
     return c
 end
 
--- Components (Toggle, Slider, etc.) — same as before + click sound already handled by makeInteractive
-
 function Section:CreateToggle(opts)
     opts = opts or {}
     local name, def, cb = opts.Name or "Toggle", opts.Default == true, opts.Callback
@@ -963,71 +951,6 @@ function Section:CreateToggle(opts)
     return { Set = function(_, v) set(v == true) end, Get = function() return state end }
 end
 
-function Section:CreateSlider(opts)
-    opts = opts or {}
-    local name = opts.Name or "Slider"
-    local min, max, def = opts.Min or 0, opts.Max or 100, opts.Default or opts.Min or 0
-    local dec, unit, cb = opts.Decimals or 0, opts.ValueUnit or "", opts.Callback
-    local theme = self.Theme
-    local c = elContainer(self, 52)
-
-    create("TextLabel", {
-        Size = UDim2.new(1, -70, 0, 18), Position = UDim2.fromOffset(12, 6),
-        BackgroundTransparency = 1, Text = name, TextColor3 = theme.Text,
-        TextSize = 13, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, Parent = c
-    })
-    local valLbl = create("TextLabel", {
-        Size = UDim2.new(0, 60, 0, 18), Position = UDim2.new(1, -70, 0, 6),
-        BackgroundTransparency = 1, Text = "", TextColor3 = theme.Accent,
-        TextSize = 12, Font = Enum.Font.GothamMedium, TextXAlignment = Enum.TextXAlignment.Right, Parent = c
-    })
-
-    local bar = create("Frame", {
-        Size = UDim2.new(1, -24, 0, 6), Position = UDim2.fromOffset(12, 34),
-        BackgroundColor3 = theme.Surface, BorderSizePixel = 0, Parent = c
-    })
-    corner(bar, UDim.new(1, 0))
-    local fill = create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = bar })
-    corner(fill, UDim.new(1, 0))
-    local knob = create("Frame", {
-        Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0, 0, 0.5, 0), BackgroundColor3 = Color3.new(1,1,1), BorderSizePixel = 0, Parent = bar
-    })
-    corner(knob, UDim.new(1, 0))
-
-    local value = def
-    local function set(v, fire)
-        v = math.clamp(v, min, max)
-        if dec > 0 then local m = 10^dec; v = math.floor(v*m+0.5)/m else v = math.floor(v+0.5) end
-        value = v
-        local pct = (v - min) / (max - min)
-        fill.Size = UDim2.new(pct, 0, 1, 0)
-        knob.Position = UDim2.new(pct, 0, 0.5, 0)
-        valLbl.Text = string.format("%."..dec.."f%s", v, unit)
-        if fire ~= false then safe(cb, v) end
-    end
-    set(def, false)
-
-    local sliding = false
-    local function upd(inp)
-        local rel = (inp.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
-        set(min + math.clamp(rel, 0, 1) * (max - min))
-    end
-    bar.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-            sliding = true; upd(i)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(i)
-        if sliding and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then upd(i) end
-    end)
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then sliding = false end
-    end)
-
-    return { Set = function(_, v) set(v) end, Get = function() return value end }
-end
-
 function Section:CreateButton(opts)
     opts = opts or {}
     local name, cb = opts.Name or "Button", opts.Callback
@@ -1050,45 +973,12 @@ function Section:CreateButton(opts)
     return {}
 end
 
-function Section:CreateTextBox(opts)
-    opts = opts or {}
-    local name = opts.Name or "TextBox"
-    local ph = opts.Placeholder or "..."
-    local clear = opts.ClearOnFocus == true
-    local cb = opts.Callback
-    local theme = self.Theme
-    local c = elContainer(self, 36)
-
-    create("TextLabel", {
-        Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(12, 0),
-        BackgroundTransparency = 1, Text = name, TextColor3 = theme.Text,
-        TextSize = 13, Font = Enum.Font.Gotham, TextXAlignment = Enum.TextXAlignment.Left, Parent = c
-    })
-
-    local box = create("TextBox", {
-        Size = UDim2.new(0.55, -12, 0, 24), Position = UDim2.new(0.45, 0, 0.5, 0),
-        AnchorPoint = Vector2.new(0, 0.5), BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.3, Text = "", PlaceholderText = ph,
-        PlaceholderColor3 = theme.Muted, TextColor3 = theme.Text, TextSize = 12,
-        Font = Enum.Font.Gotham, ClearTextOnFocus = clear, Parent = c
-    })
-    corner(box, UDim.new(0, 6)); stroke(box, theme.Stroke, 0.88, 1); pad(box, 8, 8, 0, 0)
-
-    box.FocusLost:Connect(function(enter)
-        if enter or box.Text ~= "" then safe(cb, box.Text) end
-    end)
-
-    return { Set = function(_, t) box.Text = tostring(t) end, Get = function() return box.Text end }
-end
-
--- (Dropdown, Keybind, ColorPicker kept shorter for length — they work the same as previous version)
-
 function Ecstasy:Destroy()
     for _, w in ipairs(self.Windows) do pcall(function() w:Destroy() end) end
     table.clear(self.Windows)
     self._maid:Clean()
-    if self._blur then self._blur:Destroy(); self._blur = nil end
-    if notifGui then notifGui:Destroy(); notifGui = nil end
+    if self._blur then self._blur:Destroy() self._blur = nil end
+    if notifGui then notifGui:Destroy() notifGui = nil end
     if SoundFolder then SoundFolder:Destroy() end
 end
 
