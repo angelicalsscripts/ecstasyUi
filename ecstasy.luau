@@ -115,16 +115,18 @@ local function mkSound(id, vol)
 	return s
 end
 
-local ClickSnd = mkSound("rbxassetid://10066991788", 0.18)
-ClickSnd.PlaybackSpeed = 1.15
-local NotifySnd = mkSound("rbxassetid://4590662766", 0.14)
+local ClickSnd = mkSound("rbxassetid://6895079853", 0.35)
+ClickSnd.PlaybackSpeed = 1.2
+local NotifySnd = mkSound("rbxassetid://4590662766", 0.28)
 NotifySnd.PlaybackSpeed = 1.05
-local OpenSnd = mkSound("rbxassetid://9117422732", 0.12)
-OpenSnd.PlaybackSpeed = 1.2
-local CloseSnd = mkSound("rbxassetid://9117422732", 0.1)
+local OpenSnd = mkSound("rbxassetid://9117422732", 0.22)
+OpenSnd.PlaybackSpeed = 1.25
+local CloseSnd = mkSound("rbxassetid://9117422732", 0.18)
 CloseSnd.PlaybackSpeed = 0.85
-local TabSnd = mkSound("rbxassetid://10066991788", 0.14)
-TabSnd.PlaybackSpeed = 1.35
+local TabSnd = mkSound("rbxassetid://6895079853", 0.28)
+TabSnd.PlaybackSpeed = 1.4
+local SliderSnd = mkSound("rbxassetid://6895079853", 0.2)
+SliderSnd.PlaybackSpeed = 1.5
 
 local Ecstasy = {
 	Windows = {},
@@ -199,7 +201,7 @@ loadConfig()
 
 function Ecstasy:PlayClick()
 	if self.SoundEnabled and self.ClickSounds then
-		ClickSnd.Volume = self.SoundVolume * 0.85
+		ClickSnd.Volume = math.clamp(self.SoundVolume, 0, 1)
 		ClickSnd.TimePosition = 0
 		ClickSnd:Play()
 	end
@@ -207,7 +209,7 @@ end
 
 function Ecstasy:PlayNotify()
 	if self.SoundEnabled and self.NotifySounds then
-		NotifySnd.Volume = self.SoundVolume * 0.7
+		NotifySnd.Volume = math.clamp(self.SoundVolume * 0.9, 0, 1)
 		NotifySnd.TimePosition = 0
 		NotifySnd:Play()
 	end
@@ -215,7 +217,7 @@ end
 
 function Ecstasy:PlayOpen()
 	if self.SoundEnabled and self.ClickSounds then
-		OpenSnd.Volume = self.SoundVolume * 0.55
+		OpenSnd.Volume = math.clamp(self.SoundVolume * 0.7, 0, 1)
 		OpenSnd.TimePosition = 0
 		OpenSnd:Play()
 	end
@@ -223,7 +225,7 @@ end
 
 function Ecstasy:PlayClose()
 	if self.SoundEnabled and self.ClickSounds then
-		CloseSnd.Volume = self.SoundVolume * 0.45
+		CloseSnd.Volume = math.clamp(self.SoundVolume * 0.55, 0, 1)
 		CloseSnd.TimePosition = 0
 		CloseSnd:Play()
 	end
@@ -231,17 +233,48 @@ end
 
 function Ecstasy:PlayTab()
 	if self.SoundEnabled and self.ClickSounds then
-		TabSnd.Volume = self.SoundVolume * 0.55
+		TabSnd.Volume = math.clamp(self.SoundVolume * 0.75, 0, 1)
 		TabSnd.TimePosition = 0
 		TabSnd:Play()
 	end
 end
 
+function Ecstasy:PlaySlider()
+	if self.SoundEnabled and self.ClickSounds then
+		SliderSnd.Volume = math.clamp(self.SoundVolume * 0.45, 0, 1)
+		SliderSnd.TimePosition = 0
+		SliderSnd:Play()
+	end
+end
+
 function Ecstasy:RegisterAccent(obj, prop)
+	if not obj then return end
 	prop = prop or "BackgroundColor3"
+	pcall(function()
+		obj:SetAttribute("EcstasyAccent", true)
+		obj:SetAttribute("EcstasyAccentProp", prop)
+		obj[prop] = Theme.Accent
+	end)
 	table.insert(self._accentObjects, { obj = obj, prop = prop })
-	if obj and obj.Parent then
-		pcall(function() obj[prop] = Theme.Accent end)
+end
+
+function Ecstasy:TagAccent(obj, prop)
+	self:RegisterAccent(obj, prop)
+end
+
+local function applyAccentToTree(root, col)
+	if not root then return end
+	local list = { root }
+	pcall(function()
+		for _, d in ipairs(root:GetDescendants()) do
+			table.insert(list, d)
+		end
+	end)
+	for _, d in ipairs(list) do
+		if d:GetAttribute("EcstasyAccent") then
+			local prop = d:GetAttribute("EcstasyAccentProp") or "BackgroundColor3"
+			pcall(function() d[prop] = col end)
+		end
 	end
 end
 
@@ -260,13 +293,27 @@ function Ecstasy:SetAccent(name)
 		if win._titleLine and win._titleLine.Parent then
 			win._titleLine.BackgroundColor3 = col
 		end
+		applyAccentToTree(win.Gui, col)
+		applyAccentToTree(win.GlowHost, col)
 	end
+	applyAccentToTree(NGui, col)
 	for _, entry in ipairs(self._accentObjects) do
-		if entry.obj and entry.obj.Parent then
+		if entry.obj and entry.obj.Parent and not entry.locked then
 			pcall(function() entry.obj[entry.prop] = col end)
 		end
 	end
 	saveConfig()
+end
+
+function Ecstasy:ResolveColor(opts, fallback)
+	opts = opts or {}
+	if opts.Color then
+		if typeof(opts.Color) == "Color3" then return opts.Color, true end
+		if type(opts.Color) == "string" and ACCENT_PRESETS[opts.Color] then
+			return ACCENT_PRESETS[opts.Color], true
+		end
+	end
+	return fallback or Theme.Accent, false
 end
 
 function Ecstasy:RegisterGlass(obj, baseTrans)
@@ -392,6 +439,7 @@ function Ecstasy:Notify(o)
 	local title = o.Title or "Notification"
 	local content = o.Content or ""
 	local duration = o.Duration or 4
+	local closed = false
 
 	local wrapper = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -404,24 +452,25 @@ function Ecstasy:Notify(o)
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Theme.Surface,
-		BackgroundTransparency = 0.04,
+		BackgroundTransparency = 0.06 + Ecstasy.GlassTransparency * 0.25,
 		BorderSizePixel = 0,
 		Parent = wrapper
 	})
 	corner(card, UDim.new(0, 14))
-	stroke(card, Theme.Stroke, 0.93, 1)
+	stroke(card, Theme.Stroke, 0.92, 1)
 
 	local glow = create("ImageLabel", {
-		Size = UDim2.new(1, 40, 1, 40),
+		Size = UDim2.new(1, 50, 1, 50),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Image = GLOW,
 		ImageColor3 = Theme.Accent,
-		ImageTransparency = 0.88,
+		ImageTransparency = 0.86,
 		ZIndex = 0,
 		Parent = card
 	})
+	Ecstasy:RegisterAccent(glow, "ImageColor3")
 
 	local inner = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -499,18 +548,46 @@ function Ecstasy:Notify(o)
 	wrapper.Position = UDim2.new(1, 40, 0, 0)
 	card.GroupTransparency = 1
 
-	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.32, Enum.EasingStyle.Quint)
-	tween(card, { GroupTransparency = 0 }, 0.28, Enum.EasingStyle.Quint)
-	tween(scale, { Scale = 1 }, 0.34, Enum.EasingStyle.Back)
+	local function dismiss()
+		if closed or not wrapper.Parent then return end
+		closed = true
+		tween(wrapper, { Position = UDim2.new(1, 48, 0, 0) }, 0.22, Enum.EasingStyle.Quint)
+		tween(card, { GroupTransparency = 1 }, 0.2)
+		tween(scale, { Scale = 0.9 }, 0.2)
+		task.delay(0.24, function() if wrapper.Parent then wrapper:Destroy() end end)
+	end
+
+	local hit = create("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "",
+		ZIndex = 5,
+		Parent = card
+	})
+	hit.MouseEnter:Connect(function()
+		if closed then return end
+		tween(scale, { Scale = 1.04 }, 0.16, Enum.EasingStyle.Quint)
+		tween(card, { BackgroundTransparency = 0.02 }, 0.16)
+		tween(glow, { ImageTransparency = 0.78 }, 0.16)
+	end)
+	hit.MouseLeave:Connect(function()
+		if closed then return end
+		tween(scale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
+		tween(card, { BackgroundTransparency = 0.06 + Ecstasy.GlassTransparency * 0.25 }, 0.18)
+		tween(glow, { ImageTransparency = 0.86 }, 0.18)
+	end)
+	hit.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		dismiss()
+	end)
+
+	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.3, Enum.EasingStyle.Quint)
+	tween(card, { GroupTransparency = 0 }, 0.26, Enum.EasingStyle.Quint)
+	tween(scale, { Scale = 1 }, 0.32, Enum.EasingStyle.Back)
 	tween(prog, { Size = UDim2.fromScale(0, 1) }, duration, Enum.EasingStyle.Linear)
 
 	task.delay(duration, function()
-		if not wrapper.Parent then return end
-		tween(wrapper, { Position = UDim2.new(1, 48, 0, 0) }, 0.24, Enum.EasingStyle.Quint)
-		tween(card, { GroupTransparency = 1 }, 0.22)
-		tween(scale, { Scale = 0.92 }, 0.22)
-		task.wait(0.26)
-		if wrapper.Parent then wrapper:Destroy() end
+		dismiss()
 	end)
 end
 
@@ -1044,6 +1121,7 @@ function Window:CreateTab(opts)
 		Parent = btn
 	})
 	corner(accent, UDim.new(0, 2))
+	Ecstasy:RegisterAccent(accent)
 	tab.Accent = accent
 
 	local iconOffset = 20
@@ -1122,7 +1200,6 @@ function Window:CreateTab(opts)
 		end
 	end)
 	btn.MouseButton1Click:Connect(function()
-		Ecstasy:PlayClick()
 		self:SelectTab(tab)
 	end)
 
@@ -1240,6 +1317,7 @@ function Section:CreateToggle(opts)
 	opts = opts or {}
 	local name, def, cb = opts.Name or "Toggle", opts.Default == true, opts.Callback
 	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
 	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
@@ -1254,6 +1332,7 @@ function Section:CreateToggle(opts)
 		BorderSizePixel = 0, Parent = c
 	})
 	corner(track, UDim.new(1, 0))
+	if not locked then Ecstasy:RegisterAccent(track) end
 	local knob = create("Frame", {
 		Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(3, 3),
 		BackgroundColor3 = th.Muted, BorderSizePixel = 0, Parent = track
@@ -1263,8 +1342,9 @@ function Section:CreateToggle(opts)
 	local state = def
 	local function set(v, fire)
 		state = v
+		local col = locked and accentCol or Theme.Accent
 		if state then
-			tween(track, { BackgroundColor3 = th.Accent }, 0.2)
+			tween(track, { BackgroundColor3 = col }, 0.2)
 			tween(knob, { Position = UDim2.fromOffset(23, 3), BackgroundColor3 = Color3.new(1, 1, 1) }, 0.2)
 		else
 			tween(track, { BackgroundColor3 = th.Surface3 }, 0.2)
@@ -1288,6 +1368,7 @@ function Section:CreateButton(opts)
 	opts = opts or {}
 	local name, cb = opts.Name or "Button", opts.Callback
 	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
 	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	local btn = create("TextButton", {
@@ -1295,7 +1376,11 @@ function Section:CreateButton(opts)
 		TextColor3 = th.Text, TextSize = 13, FontFace = FontMedium,
 		AutoButtonColor = false, Parent = c
 	})
-	btn.MouseEnter:Connect(function() tween(btn, { TextColor3 = th.Accent }, 0.15) end)
+	if not locked then Ecstasy:RegisterAccent(btn, "TextColor3") end
+	btn.MouseEnter:Connect(function()
+		local col = locked and accentCol or Theme.Accent
+		tween(btn, { TextColor3 = col }, 0.15)
+	end)
 	btn.MouseLeave:Connect(function() tween(btn, { TextColor3 = th.Text }, 0.2) end)
 	btn.MouseButton1Click:Connect(function()
 		Ecstasy:PlayClick()
@@ -1332,57 +1417,69 @@ function Ecstasy:Confirm(opts)
 		Parent = parentGui
 	})
 	local card = create("CanvasGroup", {
-		Size = UDim2.fromOffset(320, 0),
+		Size = UDim2.fromOffset(340, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = Theme.Surface,
-		BackgroundTransparency = 0.04,
+		BackgroundTransparency = 0.04 + Ecstasy.GlassTransparency * 0.2,
 		BorderSizePixel = 0,
 		GroupTransparency = 1,
 		ZIndex = 501,
 		Parent = overlay
 	})
 	corner(card, UDim.new(0, 16))
-	stroke(card, Theme.Stroke, 0.9)
-	local scale = create("UIScale", { Scale = 0.9, Parent = card })
-	pad(card, 20, 20, 18, 18)
+	stroke(card, Theme.Stroke, 0.88)
+	local scale = create("UIScale", { Scale = 0.88, Parent = card })
+	pad(card, 22, 22, 20, 20)
 	create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0, 12),
+		Parent = card
+	})
+
+	local glow = create("ImageLabel", {
+		Size = UDim2.fromOffset(120, 120),
+		Position = UDim2.fromScale(0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Image = GLOW,
+		ImageColor3 = warnColor,
+		ImageTransparency = 0.82,
+		ZIndex = 501,
 		Parent = card
 	})
 
 	local iconWrap = create("Frame", {
-		Size = UDim2.fromOffset(44, 44),
+		Size = UDim2.fromOffset(48, 48),
 		BackgroundColor3 = warnColor,
-		BackgroundTransparency = 0.85,
+		BackgroundTransparency = 0.82,
 		BorderSizePixel = 0,
 		LayoutOrder = 1,
 		ZIndex = 502,
 		Parent = card
 	})
 	corner(iconWrap, UDim.new(1, 0))
-	stroke(iconWrap, warnColor, 0.5, 1.5)
-
+	stroke(iconWrap, warnColor, 0.35, 1.5)
+	local iconScale = create("UIScale", { Scale = 0.6, Parent = iconWrap })
 	create("TextLabel", {
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
 		Text = "!",
 		TextColor3 = warnColor,
-		TextSize = 22,
+		TextSize = 24,
 		FontFace = FontSemi,
 		ZIndex = 503,
 		Parent = iconWrap
 	})
 
 	create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 20),
+		Size = UDim2.new(1, 0, 0, 22),
 		BackgroundTransparency = 1,
 		Text = title,
 		TextColor3 = Theme.Text,
-		TextSize = 15,
+		TextSize = 16,
 		FontFace = FontSemi,
 		LayoutOrder = 2,
 		ZIndex = 502,
@@ -1404,7 +1501,7 @@ function Ecstasy:Confirm(opts)
 	})
 
 	local btnRow = create("Frame", {
-		Size = UDim2.new(1, 0, 0, 36),
+		Size = UDim2.new(1, 0, 0, 38),
 		BackgroundTransparency = 1,
 		LayoutOrder = 4,
 		ZIndex = 502,
@@ -1413,13 +1510,12 @@ function Ecstasy:Confirm(opts)
 	create("UIListLayout", {
 		FillDirection = Enum.FillDirection.Horizontal,
 		HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		Padding = UDim.new(0, 10),
-		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 12),
 		Parent = btnRow
 	})
 
 	local function closeModal(confirmed)
-		tween(scale, { Scale = 0.92 }, 0.14)
+		tween(scale, { Scale = 0.9 }, 0.14)
 		tween(card, { GroupTransparency = 1 }, 0.14)
 		tween(overlay, { BackgroundTransparency = 1 }, 0.14)
 		task.delay(0.16, function()
@@ -1428,10 +1524,26 @@ function Ecstasy:Confirm(opts)
 		if confirmed then safe(onConfirm) else safe(onCancel) end
 	end
 
+	local function styleBtn(btn, hoverBg)
+		local s = create("UIScale", { Scale = 1, Parent = btn })
+		btn.MouseEnter:Connect(function()
+			tween(s, { Scale = 1.05 }, 0.14, Enum.EasingStyle.Quint)
+			if hoverBg then tween(btn, hoverBg, 0.14) end
+		end)
+		btn.MouseLeave:Connect(function()
+			tween(s, { Scale = 1 }, 0.16)
+			if hoverBg then
+				tween(btn, {
+					BackgroundTransparency = btn:GetAttribute("BaseTrans") or 0.2
+				}, 0.16)
+			end
+		end)
+	end
+
 	local cancelBtn = create("TextButton", {
-		Size = UDim2.fromOffset(96, 34),
+		Size = UDim2.fromOffset(110, 36),
 		BackgroundColor3 = Theme.Surface3,
-		BackgroundTransparency = 0.25,
+		BackgroundTransparency = 0.2,
 		Text = cancelText,
 		TextColor3 = Theme.Text,
 		TextSize = 13,
@@ -1440,13 +1552,15 @@ function Ecstasy:Confirm(opts)
 		ZIndex = 503,
 		Parent = btnRow
 	})
-	corner(cancelBtn, UDim.new(0, 9))
-	stroke(cancelBtn, Theme.Stroke, 0.9)
+	cancelBtn:SetAttribute("BaseTrans", 0.2)
+	corner(cancelBtn, UDim.new(0, 10))
+	stroke(cancelBtn, Theme.Stroke, 0.88)
+	styleBtn(cancelBtn, { BackgroundTransparency = 0.05 })
 
 	local confirmBtn = create("TextButton", {
-		Size = UDim2.fromOffset(108, 34),
+		Size = UDim2.fromOffset(120, 36),
 		BackgroundColor3 = warnColor,
-		BackgroundTransparency = 0.12,
+		BackgroundTransparency = 0.08,
 		Text = confirmText,
 		TextColor3 = Color3.fromRGB(20, 16, 8),
 		TextSize = 13,
@@ -1455,7 +1569,9 @@ function Ecstasy:Confirm(opts)
 		ZIndex = 503,
 		Parent = btnRow
 	})
-	corner(confirmBtn, UDim.new(0, 9))
+	confirmBtn:SetAttribute("BaseTrans", 0.08)
+	corner(confirmBtn, UDim.new(0, 10))
+	styleBtn(confirmBtn, { BackgroundTransparency = 0 })
 
 	cancelBtn.MouseButton1Click:Connect(function()
 		Ecstasy:PlayClick()
@@ -1466,13 +1582,12 @@ function Ecstasy:Confirm(opts)
 		closeModal(true)
 	end)
 
-	tween(overlay, { BackgroundTransparency = 0.45 }, 0.18)
-	tween(card, { GroupTransparency = 0 }, 0.2, Enum.EasingStyle.Quint)
-	tween(scale, { Scale = 1 }, 0.24, Enum.EasingStyle.Back)
+	tween(overlay, { BackgroundTransparency = 0.5 }, 0.2)
+	tween(card, { GroupTransparency = 0 }, 0.22, Enum.EasingStyle.Quint)
+	tween(scale, { Scale = 1 }, 0.28, Enum.EasingStyle.Back)
+	tween(iconScale, { Scale = 1 }, 0.32, Enum.EasingStyle.Back)
 
-	return {
-		Close = function() closeModal(false) end
-	}
+	return { Close = function() closeModal(false) end }
 end
 
 function Section:CreateWarningButton(opts)
@@ -1488,23 +1603,23 @@ function Section:CreateWarningButton(opts)
 	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	local icon = create("TextLabel", {
-		Size = UDim2.fromOffset(22, 22),
+		Size = UDim2.fromOffset(24, 24),
 		Position = UDim2.new(0, 12, 0.5, 0),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundColor3 = warnColor,
-		BackgroundTransparency = 0.82,
+		BackgroundTransparency = 0.8,
 		Text = "!",
 		TextColor3 = warnColor,
-		TextSize = 14,
+		TextSize = 15,
 		FontFace = FontSemi,
 		Parent = c
 	})
 	corner(icon, UDim.new(1, 0))
-	stroke(icon, warnColor, 0.45, 1)
+	stroke(icon, warnColor, 0.4, 1)
 
 	local btn = create("TextButton", {
-		Size = UDim2.new(1, -40, 1, 0),
-		Position = UDim2.fromOffset(38, 0),
+		Size = UDim2.new(1, -44, 1, 0),
+		Position = UDim2.fromOffset(40, 0),
 		BackgroundTransparency = 1,
 		Text = name,
 		TextColor3 = th.Text,
@@ -1514,8 +1629,14 @@ function Section:CreateWarningButton(opts)
 		AutoButtonColor = false,
 		Parent = c
 	})
-	btn.MouseEnter:Connect(function() tween(btn, { TextColor3 = warnColor }, 0.15) end)
-	btn.MouseLeave:Connect(function() tween(btn, { TextColor3 = th.Text }, 0.2) end)
+	btn.MouseEnter:Connect(function()
+		tween(btn, { TextColor3 = warnColor }, 0.15)
+		tween(icon, { BackgroundTransparency = 0.65 }, 0.15)
+	end)
+	btn.MouseLeave:Connect(function()
+		tween(btn, { TextColor3 = th.Text }, 0.2)
+		tween(icon, { BackgroundTransparency = 0.8 }, 0.2)
+	end)
 	btn.MouseButton1Click:Connect(function()
 		Ecstasy:PlayClick()
 		tween(c, { BackgroundTransparency = 0.05 }, 0.08)
@@ -1538,6 +1659,7 @@ function Section:CreateSlider(opts)
 	local min, max, def = opts.Min or 0, opts.Max or 100, opts.Default or opts.Min or 0
 	local dec, cb = opts.Decimals or 0, opts.Callback
 	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
 	local c = el(self, 60, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
@@ -1547,17 +1669,19 @@ function Section:CreateSlider(opts)
 	})
 	local val = create("TextLabel", {
 		Size = UDim2.new(0, 60, 0, 16), Position = UDim2.new(1, -70, 0, 8),
-		BackgroundTransparency = 1, Text = "", TextColor3 = th.Accent,
+		BackgroundTransparency = 1, Text = "", TextColor3 = accentCol,
 		TextSize = 12, FontFace = FontMedium, TextXAlignment = Enum.TextXAlignment.Right, Parent = c
 	})
+	if not locked then Ecstasy:RegisterAccent(val, "TextColor3") end
 
 	local bar = create("Frame", {
 		Size = UDim2.new(1, -28, 0, 5), Position = UDim2.fromOffset(14, 38),
 		BackgroundColor3 = th.Surface3, BorderSizePixel = 0, Parent = c
 	})
 	corner(bar, UDim.new(1, 0))
-	local fill = create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = th.Accent, BorderSizePixel = 0, Parent = bar })
+	local fill = create("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = accentCol, BorderSizePixel = 0, Parent = bar })
 	corner(fill, UDim.new(1, 0))
+	if not locked then Ecstasy:RegisterAccent(fill) end
 	local knob = create("Frame", {
 		Size = UDim2.fromOffset(12, 12), AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0, 0, 0.5, 0), BackgroundColor3 = Color3.new(1, 1, 1),
@@ -1585,7 +1709,9 @@ function Section:CreateSlider(opts)
 	end
 	bar.InputBegan:Connect(function(i)
 		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
-			sliding = true upd(i)
+			sliding = true
+			Ecstasy:PlaySlider()
+			upd(i)
 		end
 	end)
 	UserInputService.InputChanged:Connect(function(i)
@@ -1606,6 +1732,7 @@ function Section:CreateDropdown(opts)
 	local cb = opts.Callback
 	local th = self.Theme
 	local win = self.Window
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
 	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
@@ -1633,11 +1760,12 @@ function Section:CreateDropdown(opts)
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundTransparency = 1,
 		Text = tostring(selected),
-		TextColor3 = th.Accent,
+		TextColor3 = accentCol,
 		TextSize = 12,
 		FontFace = FontMedium,
 		Parent = chip
 	})
+	if not locked then Ecstasy:RegisterAccent(disp, "TextColor3") end
 
 	local open, drop, dropScale, outsideConn = false, nil, nil, nil
 
@@ -1649,8 +1777,6 @@ function Section:CreateDropdown(opts)
 		if s then tween(s, { Scale = 0.96 }, 0.12) end
 		if d:IsA("CanvasGroup") then
 			tween(d, { GroupTransparency = 1 }, 0.12)
-		else
-			tween(d, { BackgroundTransparency = 1 }, 0.12)
 		end
 		task.delay(0.14, function() if d and d.Parent then d:Destroy() end end)
 	end
@@ -1658,17 +1784,18 @@ function Section:CreateDropdown(opts)
 	local function openMenu()
 		if open then close() return end
 		open = true
+		Ecstasy:PlayClick()
 		local host = win.Gui
 		local absPos = c.AbsolutePosition
 		local absSize = c.AbsoluteSize
 		local inset = GuiService:GetGuiInset()
-		local h = math.min(#options * 34 + 12, 190)
+		local h = math.min(#options * 34 + 14, 200)
 
 		drop = create("CanvasGroup", {
-			Size = UDim2.fromOffset(math.max(absSize.X, 160), h),
+			Size = UDim2.fromOffset(math.max(absSize.X, 170), h),
 			Position = UDim2.fromOffset(absPos.X - inset.X, absPos.Y - inset.Y + absSize.Y + 6),
 			BackgroundColor3 = th.Surface,
-			BackgroundTransparency = 0.02,
+			BackgroundTransparency = 0.08 + Ecstasy.GlassTransparency * 0.35,
 			BorderSizePixel = 0,
 			GroupTransparency = 1,
 			ZIndex = 200,
@@ -1683,11 +1810,12 @@ function Section:CreateDropdown(opts)
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			ScrollBarThickness = 2,
-			ScrollBarImageColor3 = th.Accent,
+			ScrollBarImageColor3 = locked and accentCol or Theme.Accent,
 			CanvasSize = UDim2.new(0, 0, 0, #options * 34),
 			ZIndex = 201,
 			Parent = drop
 		})
+		if not locked then Ecstasy:RegisterAccent(sc, "ScrollBarImageColor3") end
 		create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = sc })
 		pad(sc, 6, 6, 6, 6)
 
@@ -1696,7 +1824,7 @@ function Section:CreateDropdown(opts)
 			local b = create("TextButton", {
 				Size = UDim2.new(1, 0, 0, 30),
 				BackgroundColor3 = th.Surface2,
-				BackgroundTransparency = isSel and 0.5 or 1,
+				BackgroundTransparency = isSel and 0.45 or 1,
 				Text = "",
 				AutoButtonColor = false,
 				ZIndex = 202,
@@ -1708,25 +1836,31 @@ function Section:CreateDropdown(opts)
 				Position = UDim2.fromOffset(12, 0),
 				BackgroundTransparency = 1,
 				Text = tostring(opt),
-				TextColor3 = isSel and th.Accent or th.Text,
+				TextColor3 = isSel and (locked and accentCol or Theme.Accent) or th.Text,
 				TextSize = 12,
 				FontFace = isSel and FontMedium or FontRegular,
 				TextXAlignment = Enum.TextXAlignment.Left,
 				ZIndex = 203,
 				Parent = b
 			})
+			local bScale = create("UIScale", { Scale = 1, Parent = b })
 			b.MouseEnter:Connect(function()
-				tween(b, { BackgroundTransparency = 0.45 }, 0.12)
-				tween(t, { TextColor3 = th.Accent }, 0.12)
+				local col = locked and accentCol or Theme.Accent
+				tween(b, { BackgroundTransparency = 0.4 }, 0.12)
+				tween(t, { TextColor3 = col }, 0.12)
+				tween(bScale, { Scale = 1.02 }, 0.12)
 			end)
 			b.MouseLeave:Connect(function()
 				local sel = tostring(opt) == tostring(selected)
-				tween(b, { BackgroundTransparency = sel and 0.5 or 1 }, 0.15)
-				tween(t, { TextColor3 = sel and th.Accent or th.Text }, 0.15)
+				local col = locked and accentCol or Theme.Accent
+				tween(b, { BackgroundTransparency = sel and 0.45 or 1 }, 0.15)
+				tween(t, { TextColor3 = sel and col or th.Text }, 0.15)
+				tween(bScale, { Scale = 1 }, 0.15)
 			end)
 			b.MouseButton1Click:Connect(function()
 				selected = opt
 				disp.Text = tostring(opt)
+				Ecstasy:PlayClick()
 				safe(cb, opt)
 				close()
 			end)
@@ -1740,15 +1874,11 @@ function Section:CreateDropdown(opts)
 				if not open then return end
 				if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
 					local pos = inp.Position
-					local dp = drop.AbsolutePosition
-					local ds = drop.AbsoluteSize
+					local dp, ds = drop.AbsolutePosition, drop.AbsoluteSize
 					local insideDrop = pos.X >= dp.X and pos.X <= dp.X + ds.X and pos.Y >= dp.Y and pos.Y <= dp.Y + ds.Y
-					local cp = c.AbsolutePosition
-					local cs = c.AbsoluteSize
+					local cp, cs = c.AbsolutePosition, c.AbsoluteSize
 					local insideChip = pos.X >= cp.X and pos.X <= cp.X + cs.X and pos.Y >= cp.Y and pos.Y <= cp.Y + cs.Y
-					if not insideDrop and not insideChip then
-						close()
-					end
+					if not insideDrop and not insideChip then close() end
 				end
 			end)
 		end)
@@ -1757,16 +1887,13 @@ function Section:CreateDropdown(opts)
 	create("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Parent = c
 	}).MouseButton1Click:Connect(function()
-		Ecstasy:PlayClick()
 		openMenu()
 	end)
 
 	return {
 		Set = function(_, v) selected = v disp.Text = tostring(v) end,
 		Get = function() return selected end,
-		SetOptions = function(_, list)
-			options = list or options
-		end
+		SetOptions = function(_, list) options = list or options end
 	}
 end
 
@@ -2010,6 +2137,7 @@ function Section:CreateProgressBar(opts)
 		BackgroundTransparency = 1, Text = math.floor(value * 100) .. "%", TextColor3 = th.Accent,
 		TextSize = 12, FontFace = FontMedium, TextXAlignment = Enum.TextXAlignment.Right, Parent = c
 	})
+	Ecstasy:RegisterAccent(pct, "TextColor3")
 	local bar = create("Frame", {
 		Size = UDim2.new(1, -28, 0, 6), Position = UDim2.fromOffset(14, 36),
 		BackgroundColor3 = th.Surface3, BorderSizePixel = 0, Parent = c
@@ -2019,6 +2147,7 @@ function Section:CreateProgressBar(opts)
 		Size = UDim2.new(value, 0, 1, 0), BackgroundColor3 = th.Accent, BorderSizePixel = 0, Parent = bar
 	})
 	corner(fill, UDim.new(1, 0))
+	Ecstasy:RegisterAccent(fill)
 	return {
 		Set = function(_, v)
 			v = math.clamp(v, 0, 1)
