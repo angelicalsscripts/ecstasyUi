@@ -2391,10 +2391,12 @@ function Section:CreateSearch(opts)
 end
 
 function Section:CreateDivider(opts)
+	opts = opts or {}
 	local th = self.Theme
 	local c = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 12),
 		BackgroundTransparency = 1,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
 		Parent = self.List
 	})
 	create("Frame", {
@@ -2405,6 +2407,526 @@ function Section:CreateDivider(opts)
 		BorderSizePixel = 0,
 		Parent = c
 	})
+	return {}
+end
+
+function Section:CreateSpacer(opts)
+	opts = opts or {}
+	local h = opts.Height or 10
+	create("Frame", {
+		Size = UDim2.new(1, 0, 0, h),
+		BackgroundTransparency = 1,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	return {}
+end
+
+function Section:CreatePrimaryButton(opts)
+	opts = opts or {}
+	local name, cb = opts.Name or "Primary", opts.Callback
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 44),
+		BackgroundColor3 = accentCol,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	corner(c, UDim.new(0, 10))
+	if not locked then Ecstasy:RegisterAccent(c) end
+	addHover(c)
+	local btn = create("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextSize = 13,
+		FontFace = FontSemi,
+		AutoButtonColor = false,
+		Parent = c
+	})
+	btn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		tween(c, { BackgroundTransparency = 0.05 }, 0.08)
+		task.delay(0.12, function() tween(c, { BackgroundTransparency = 0.15 }, 0.2) end)
+		safe(cb)
+	end)
+	return {}
+end
+
+function Section:CreateGhostButton(opts)
+	opts = opts or {}
+	local name, cb = opts.Name or "Ghost", opts.Callback
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 44),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	corner(c, UDim.new(0, 10))
+	local st = stroke(c, accentCol, 0.45, 1.5)
+	if not locked then Ecstasy:RegisterAccent(st, "Color") end
+	addHover(c)
+	local btn = create("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = accentCol,
+		TextSize = 13,
+		FontFace = FontMedium,
+		AutoButtonColor = false,
+		Parent = c
+	})
+	if not locked then Ecstasy:RegisterAccent(btn, "TextColor3") end
+	btn.MouseEnter:Connect(function()
+		tween(c, { BackgroundTransparency = 0.85 }, 0.15)
+		tween(st, { Transparency = 0.2 }, 0.15)
+	end)
+	btn.MouseLeave:Connect(function()
+		tween(c, { BackgroundTransparency = 1 }, 0.2)
+		tween(st, { Transparency = 0.45 }, 0.2)
+	end)
+	btn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		safe(cb)
+	end)
+	return {}
+end
+
+function Section:CreateToggleButton(opts)
+	opts = opts or {}
+	local name = opts.Name or "Toggle Button"
+	local state = opts.Default == true
+	local cb = opts.Callback
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
+
+	local btn = create("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = state and accentCol or th.Text,
+		TextSize = 13,
+		FontFace = FontMedium,
+		AutoButtonColor = false,
+		Parent = c
+	})
+	local badge = create("Frame", {
+		Size = UDim2.fromOffset(8, 8),
+		Position = UDim2.new(1, -18, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = state and accentCol or th.Muted,
+		BorderSizePixel = 0,
+		Parent = c
+	})
+	corner(badge, UDim.new(1, 0))
+	if not locked then
+		Ecstasy:RegisterAccent(btn, "TextColor3")
+		Ecstasy:RegisterAccent(badge)
+	end
+
+	local function set(v, fire)
+		state = v == true
+		local col = locked and accentCol or Theme.Accent
+		tween(btn, { TextColor3 = state and col or th.Text }, 0.15)
+		tween(badge, { BackgroundColor3 = state and col or th.Muted }, 0.15)
+		if fire ~= false then safe(cb, state) end
+	end
+	set(state, false)
+
+	btn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		set(not state)
+	end)
+	return { Set = function(_, v) set(v == true) end, Get = function() return state end }
+end
+
+function Section:CreateStatus(opts)
+	opts = opts or {}
+	local name = opts.Name or "Status"
+	local status = opts.Status or opts.Value or "Idle"
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
+
+	create("TextLabel", {
+		Size = UDim2.new(0.45, 0, 1, 0),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = th.Text,
+		TextSize = 13,
+		FontFace = FontRegular,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = c
+	})
+
+	local pill = create("Frame", {
+		Size = UDim2.fromOffset(0, 26),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.new(1, -14, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundColor3 = accentCol,
+		BackgroundTransparency = 0.75,
+		BorderSizePixel = 0,
+		Parent = c
+	})
+	corner(pill, UDim.new(1, 0))
+	pad(pill, 12, 12, 0, 0)
+	if not locked then Ecstasy:RegisterAccent(pill) end
+
+	local dot = create("Frame", {
+		Size = UDim2.fromOffset(7, 7),
+		Position = UDim2.new(0, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = accentCol,
+		BorderSizePixel = 0,
+		Parent = pill
+	})
+	corner(dot, UDim.new(1, 0))
+	if not locked then Ecstasy:RegisterAccent(dot) end
+
+	local label = create("TextLabel", {
+		Size = UDim2.fromOffset(0, 26),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Position = UDim2.fromOffset(12, 0),
+		BackgroundTransparency = 1,
+		Text = tostring(status),
+		TextColor3 = accentCol,
+		TextSize = 12,
+		FontFace = FontMedium,
+		Parent = pill
+	})
+	if not locked then Ecstasy:RegisterAccent(label, "TextColor3") end
+
+	return {
+		Set = function(_, v)
+			label.Text = tostring(v)
+		end,
+		Get = function() return label.Text end,
+		SetColor = function(_, col)
+			if typeof(col) == "Color3" then
+				pill.BackgroundColor3 = col
+				dot.BackgroundColor3 = col
+				label.TextColor3 = col
+			end
+		end
+	}
+end
+
+function Section:CreateNumberBox(opts)
+	opts = opts or {}
+	local name = opts.Name or "Number"
+	local min = opts.Min or 0
+	local max = opts.Max or 100
+	local value = opts.Default or min
+	local step = opts.Step or 1
+	local cb = opts.Callback
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
+
+	create("TextLabel", {
+		Size = UDim2.new(0.4, 0, 1, 0),
+		Position = UDim2.fromOffset(14, 0),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = th.Text,
+		TextSize = 13,
+		FontFace = FontRegular,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = c
+	})
+
+	local row = create("Frame", {
+		Size = UDim2.fromOffset(120, 28),
+		Position = UDim2.new(1, -14, 0.5, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		BackgroundTransparency = 1,
+		Parent = c
+	})
+
+	local function makeSide(text, x)
+		local b = create("TextButton", {
+			Size = UDim2.fromOffset(28, 28),
+			Position = UDim2.fromOffset(x, 0),
+			BackgroundColor3 = th.Surface3,
+			BackgroundTransparency = 0.2,
+			Text = text,
+			TextColor3 = th.Text,
+			TextSize = 16,
+			FontFace = FontSemi,
+			AutoButtonColor = false,
+			Parent = row
+		})
+		corner(b, UDim.new(0, 8))
+		return b
+	end
+
+	local minus = makeSide("-", 0)
+	local plus = makeSide("+", 92)
+
+	local box = create("TextBox", {
+		Size = UDim2.fromOffset(56, 28),
+		Position = UDim2.fromOffset(32, 0),
+		BackgroundColor3 = th.Surface3,
+		BackgroundTransparency = 0.25,
+		Text = tostring(value),
+		TextColor3 = accentCol,
+		TextSize = 13,
+		FontFace = FontMedium,
+		ClearTextOnFocus = false,
+		Parent = row
+	})
+	corner(box, UDim.new(0, 8))
+	if not locked then Ecstasy:RegisterAccent(box, "TextColor3") end
+
+	local function set(v, fire)
+		v = math.clamp(tonumber(v) or value, min, max)
+		value = v
+		box.Text = tostring(v)
+		if fire ~= false then safe(cb, v) end
+	end
+	set(value, false)
+
+	minus.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		set(value - step)
+	end)
+	plus.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		set(value + step)
+	end)
+	box.FocusLost:Connect(function()
+		set(box.Text)
+	end)
+
+	return { Set = function(_, v) set(v) end, Get = function() return value end }
+end
+
+function Section:CreateRadio(opts)
+	opts = opts or {}
+	local name = opts.Name or "Radio"
+	local options = opts.Options or { "A", "B", "C" }
+	local selected = opts.Default or options[1]
+	local cb = opts.Callback
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local height = 28 + #options * 30
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundColor3 = th.Surface2,
+		BackgroundTransparency = 0.2 + Ecstasy.GlassTransparency * 0.3,
+		BorderSizePixel = 0,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	corner(c, UDim.new(0, 10))
+	stroke(c, th.Stroke, 0.92)
+	Ecstasy:RegisterGlass(c, 0.2)
+	pad(c, 10, 10, 8, 8)
+
+	create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 16),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = accentCol,
+		TextSize = 11,
+		FontFace = FontSemi,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = c
+	})
+	local title = c:FindFirstChildWhichIsA("TextLabel")
+	if title and not locked then Ecstasy:RegisterAccent(title, "TextColor3") end
+
+	local list = create("Frame", {
+		Size = UDim2.new(1, 0, 1, -20),
+		Position = UDim2.fromOffset(0, 20),
+		BackgroundTransparency = 1,
+		Parent = c
+	})
+	create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = list })
+
+	local dots = {}
+	local function refresh()
+		for opt, pair in pairs(dots) do
+			local on = opt == selected
+			local col = locked and accentCol or Theme.Accent
+			tween(pair.dot, { BackgroundColor3 = on and col or th.Muted, BackgroundTransparency = on and 0 or 0.4 }, 0.15)
+			tween(pair.label, { TextColor3 = on and col or th.Text }, 0.15)
+		end
+	end
+
+	for _, opt in ipairs(options) do
+		local row = create("TextButton", {
+			Size = UDim2.new(1, 0, 0, 28),
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			Parent = list
+		})
+		local dot = create("Frame", {
+			Size = UDim2.fromOffset(14, 14),
+			Position = UDim2.new(0, 4, 0.5, 0),
+			AnchorPoint = Vector2.new(0, 0.5),
+			BackgroundColor3 = th.Muted,
+			BackgroundTransparency = 0.4,
+			BorderSizePixel = 0,
+			Parent = row
+		})
+		corner(dot, UDim.new(1, 0))
+		stroke(dot, th.Stroke, 0.7)
+		local label = create("TextLabel", {
+			Size = UDim2.new(1, -28, 1, 0),
+			Position = UDim2.fromOffset(26, 0),
+			BackgroundTransparency = 1,
+			Text = tostring(opt),
+			TextColor3 = th.Text,
+			TextSize = 12,
+			FontFace = FontRegular,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = row
+		})
+		dots[opt] = { dot = dot, label = label }
+		row.MouseButton1Click:Connect(function()
+			Ecstasy:PlayClick()
+			selected = opt
+			refresh()
+			safe(cb, selected)
+		end)
+	end
+	refresh()
+
+	return {
+		Set = function(_, v) selected = v refresh() end,
+		Get = function() return selected end
+	}
+end
+
+function Section:CreatePlayerList(opts)
+	opts = opts or {}
+	local name = opts.Name or "Players"
+	local multi = opts.MultiSelect == true
+	local cb = opts.Callback
+	local items = {}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		table.insert(items, plr.Name)
+	end
+	local list = self:CreateList({
+		Name = name,
+		Items = items,
+		MultiSelect = multi,
+		Order = opts.Order or opts.LayoutOrder,
+		Callback = cb
+	})
+	local function rebuild()
+		local names = {}
+		for _, plr in ipairs(Players:GetPlayers()) do
+			table.insert(names, plr.Name)
+		end
+		list:SetItems(names)
+	end
+	Players.PlayerAdded:Connect(rebuild)
+	Players.PlayerRemoving:Connect(rebuild)
+	return list
+end
+
+function Section:CreateCopyButton(opts)
+	opts = opts or {}
+	local name = opts.Name or "Copy"
+	local text = opts.Text or opts.Value or ""
+	local th = self.Theme
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
+
+	local btn = create("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = th.Text,
+		TextSize = 13,
+		FontFace = FontMedium,
+		AutoButtonColor = false,
+		Parent = c
+	})
+	btn.MouseEnter:Connect(function() tween(btn, { TextColor3 = Theme.Accent }, 0.15) end)
+	btn.MouseLeave:Connect(function() tween(btn, { TextColor3 = th.Text }, 0.2) end)
+	btn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		local ok = pcall(function()
+			if setclipboard then
+				setclipboard(tostring(text))
+			elseif toclipboard then
+				toclipboard(tostring(text))
+			end
+		end)
+		Ecstasy:Notify({
+			Title = ok and "Copied" or "Copy failed",
+			Content = ok and "Copied to clipboard." or "Clipboard not available.",
+			Duration = 2
+		})
+		safe(opts.Callback, text)
+	end)
+	return {
+		SetText = function(_, t) text = tostring(t) end,
+		GetText = function() return text end
+	}
+end
+
+function Section:CreateButtonRow(opts)
+	opts = opts or {}
+	local buttons = opts.Buttons or {}
+	local th = self.Theme
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 44),
+		BackgroundTransparency = 1,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 8),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = c
+	})
+	local count = math.max(#buttons, 1)
+	for i, bopts in ipairs(buttons) do
+		bopts = bopts or {}
+		local accentCol, locked = Ecstasy:ResolveColor(bopts, th.Accent)
+		local filled = bopts.Primary == true
+		local cell = create("Frame", {
+			Size = UDim2.new(1 / count, -math.floor(8 * (count - 1) / count), 1, 0),
+			BackgroundColor3 = filled and accentCol or th.Surface2,
+			BackgroundTransparency = filled and 0.15 or (0.2 + Ecstasy.GlassTransparency * 0.3),
+			BorderSizePixel = 0,
+			LayoutOrder = i,
+			Parent = c
+		})
+		corner(cell, UDim.new(0, 10))
+		stroke(cell, th.Stroke, 0.92)
+		if filled and not locked then Ecstasy:RegisterAccent(cell) end
+		addHover(cell)
+		local btn = create("TextButton", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = bopts.Name or ("Btn " .. i),
+			TextColor3 = filled and Color3.new(1, 1, 1) or th.Text,
+			TextSize = 12,
+			FontFace = FontMedium,
+			AutoButtonColor = false,
+			Parent = cell
+		})
+		btn.MouseButton1Click:Connect(function()
+			Ecstasy:PlayClick()
+			safe(bopts.Callback)
+		end)
+	end
 	return {}
 end
 
@@ -2538,21 +3060,29 @@ function Window:CreatePremadeTab(opts)
 	L:CreateToggle({ Name = "Feature", Default = false, Callback = print })
 	L:CreateSlider({ Name = "Value", Min = 0, Max = 100, Default = 50, Callback = print })
 	L:CreateProgressBar({ Name = "Load", Value = 0.65 })
-	L:CreateButton({ Name = "Action", Callback = function()
-		Ecstasy:Notify({ Title = "Done", Content = "Action completed.", Duration = 3 })
+	L:CreatePrimaryButton({ Name = "Primary Action", Callback = function()
+		Ecstasy:Notify({ Title = "Done", Content = "Primary clicked.", Duration = 3 })
 	end })
+	L:CreateGhostButton({ Name = "Ghost Action", Callback = print })
+	L:CreateToggleButton({ Name = "Armed", Default = false, Callback = print })
+	L:CreateButtonRow({
+		Buttons = {
+			{ Name = "One", Callback = print },
+			{ Name = "Two", Primary = true, Callback = print },
+			{ Name = "Three", Callback = print },
+		}
+	})
 	L:CreateDropdown({ Name = "Mode", Options = { "Normal", "Fast", "Silent" }, Default = "Normal", Callback = print })
-	L:CreateSearch({ Placeholder = "Search...", Callback = print })
+	L:CreateNumberBox({ Name = "Amount", Min = 0, Max = 50, Default = 5, Step = 1, Callback = print })
+	L:CreateStatus({ Name = "State", Status = "Ready" })
 	L:CreateDivider()
 	L:CreateLabel({ Text = "Use Settings for UI options." })
 
+	R:CreateRadio({ Name = "Priority", Options = { "Low", "Medium", "High" }, Default = "Medium", Callback = print })
 	R:CreateList({ Name = "Targets", Items = { "Player1", "Player2", "NPC" }, MultiSelect = false, Callback = print })
 	R:CreateKeybind({ Name = "Key", Default = Enum.KeyCode.E, Callback = function(k) print(k.Name) end })
-	R:CreateColorPicker({ Name = "Color", Default = Theme.Accent, Callback = print })
 	R:CreateTextBox({ Name = "Name", Placeholder = "Type...", Callback = print })
-	R:CreateImageButton({ Name = "Quick Action", Image = "rbxassetid://6031094678", Height = 48, Callback = function()
-		Ecstasy:Notify({ Title = "ecstasy", Content = "Looking clean.", Duration = 3 })
-	end })
+	R:CreateCopyButton({ Name = "Copy Invite", Text = "discord.gg/example" })
 	R:CreateWarningButton({
 		Name = "Danger Action",
 		Title = "Warning",
