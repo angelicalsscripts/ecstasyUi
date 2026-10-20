@@ -93,6 +93,12 @@ local Theme = {
 	Error = Color3.fromRGB(248, 113, 113),
 }
 
+local ACCENT_PRESETS = {
+	Purple = Color3.fromRGB(168, 85, 247),
+	Red = Color3.fromRGB(239, 68, 68),
+	White = Color3.fromRGB(245, 245, 250),
+}
+
 local GLOW = "rbxassetid://8992230677"
 local SHADOW = "rbxassetid://6014261993"
 local CONFIG_PATH = "ecstasy_config.json"
@@ -117,6 +123,8 @@ local OpenSnd = mkSound("rbxassetid://9117422732", 0.12)
 OpenSnd.PlaybackSpeed = 1.2
 local CloseSnd = mkSound("rbxassetid://9117422732", 0.1)
 CloseSnd.PlaybackSpeed = 0.85
+local TabSnd = mkSound("rbxassetid://10066991788", 0.14)
+TabSnd.PlaybackSpeed = 1.35
 
 local Ecstasy = {
 	Windows = {},
@@ -127,7 +135,9 @@ local Ecstasy = {
 	SoundVolume = 0.22,
 	GlassTransparency = 0.12,
 	Keybind = Enum.KeyCode.RightControl,
+	AccentName = "Purple",
 	_glassObjects = {},
+	_accentObjects = {},
 }
 
 local function getParent()
@@ -157,6 +167,7 @@ local function saveConfig()
 		SoundVolume = Ecstasy.SoundVolume,
 		GlassTransparency = Ecstasy.GlassTransparency,
 		Keybind = Ecstasy.Keybind and Ecstasy.Keybind.Name or "RightControl",
+		AccentName = Ecstasy.AccentName or "Purple",
 	}
 	pcall(function()
 		writefile(CONFIG_PATH, HttpService:JSONEncode(data))
@@ -177,6 +188,10 @@ local function loadConfig()
 	if data.Keybind then
 		local k = Enum.KeyCode[data.Keybind]
 		if k then Ecstasy.Keybind = k end
+	end
+	if data.AccentName and ACCENT_PRESETS[data.AccentName] then
+		Ecstasy.AccentName = data.AccentName
+		Theme.Accent = ACCENT_PRESETS[data.AccentName]
 	end
 end
 
@@ -214,6 +229,46 @@ function Ecstasy:PlayClose()
 	end
 end
 
+function Ecstasy:PlayTab()
+	if self.SoundEnabled and self.ClickSounds then
+		TabSnd.Volume = self.SoundVolume * 0.55
+		TabSnd.TimePosition = 0
+		TabSnd:Play()
+	end
+end
+
+function Ecstasy:RegisterAccent(obj, prop)
+	prop = prop or "BackgroundColor3"
+	table.insert(self._accentObjects, { obj = obj, prop = prop })
+	if obj and obj.Parent then
+		pcall(function() obj[prop] = Theme.Accent end)
+	end
+end
+
+function Ecstasy:SetAccent(name)
+	local col = ACCENT_PRESETS[name]
+	if not col then return end
+	self.AccentName = name
+	Theme.Accent = col
+	for _, win in ipairs(self.Windows) do
+		if win.Theme then win.Theme.Accent = col end
+		if win._glowLayers then
+			for _, g in ipairs(win._glowLayers) do
+				if g and g.Parent then g.ImageColor3 = col end
+			end
+		end
+		if win._titleLine and win._titleLine.Parent then
+			win._titleLine.BackgroundColor3 = col
+		end
+	end
+	for _, entry in ipairs(self._accentObjects) do
+		if entry.obj and entry.obj.Parent then
+			pcall(function() entry.obj[entry.prop] = col end)
+		end
+	end
+	saveConfig()
+end
+
 function Ecstasy:RegisterGlass(obj, baseTrans)
 	table.insert(self._glassObjects, { obj = obj, base = baseTrans or 0.1 })
 	obj.BackgroundTransparency = math.clamp((baseTrans or 0.1) + self.GlassTransparency, 0, 0.95)
@@ -249,11 +304,16 @@ local function addHover(frame, scaleTarget)
 	})
 	corner(shine, UDim.new(0, 10))
 	local grad = create("UIGradient", {
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(0.5, Theme.Accent),
+			ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+		}),
 		Transparency = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(0.35, 0.88),
-			NumberSequenceKeypoint.new(0.5, 0.7),
-			NumberSequenceKeypoint.new(0.65, 0.88),
+			NumberSequenceKeypoint.new(0.3, 0.85),
+			NumberSequenceKeypoint.new(0.5, 0.55),
+			NumberSequenceKeypoint.new(0.7, 0.85),
 			NumberSequenceKeypoint.new(1, 1),
 		}),
 		Parent = shine
@@ -262,22 +322,27 @@ local function addHover(frame, scaleTarget)
 	local hovering = false
 	frame.MouseEnter:Connect(function()
 		hovering = true
-		tween(shine, { BackgroundTransparency = 0.72 }, 0.18)
-		tween(scale, { Scale = 1.035 }, 0.2, Enum.EasingStyle.Quint)
+		grad.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(0.5, Theme.Accent),
+			ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+		})
+		tween(shine, { BackgroundTransparency = 0.62 }, 0.16)
+		tween(scale, { Scale = 1.045 }, 0.18, Enum.EasingStyle.Quint)
 	end)
 	frame.MouseLeave:Connect(function()
 		hovering = false
-		tween(shine, { BackgroundTransparency = 1 }, 0.22)
-		tween(scale, { Scale = 1 }, 0.22, Enum.EasingStyle.Quint)
+		tween(shine, { BackgroundTransparency = 1 }, 0.2)
+		tween(scale, { Scale = 1 }, 0.2, Enum.EasingStyle.Quint)
 	end)
 	frame.InputBegan:Connect(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-			tween(scale, { Scale = 0.97 }, 0.08)
+			tween(scale, { Scale = 0.94 }, 0.06, Enum.EasingStyle.Quad)
 		end
 	end)
 	frame.InputEnded:Connect(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-			tween(scale, { Scale = hovering and 1.035 or 1 }, 0.18)
+			tween(scale, { Scale = hovering and 1.045 or 1 }, 0.16, Enum.EasingStyle.Back)
 		end
 	end)
 	local conn = RunService.RenderStepped:Connect(function()
@@ -288,8 +353,8 @@ local function addHover(frame, scaleTarget)
 		if size.X <= 0 or size.Y <= 0 then return end
 		local rx = math.clamp((mouse.X - pos.X) / size.X, 0, 1)
 		local ry = math.clamp((mouse.Y - pos.Y) / size.Y, 0, 1)
-		grad.Offset = Vector2.new((rx - 0.5) * 1.5, (ry - 0.5) * 1.5)
-		grad.Rotation = (rx - 0.5) * 45
+		grad.Offset = Vector2.new((rx - 0.5) * 1.7, (ry - 0.5) * 1.7)
+		grad.Rotation = (rx - 0.5) * 55
 	end)
 	frame.Destroying:Connect(function() conn:Disconnect() end)
 end
@@ -339,12 +404,24 @@ function Ecstasy:Notify(o)
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Theme.Surface,
-		BackgroundTransparency = 0.06,
+		BackgroundTransparency = 0.04,
 		BorderSizePixel = 0,
 		Parent = wrapper
 	})
 	corner(card, UDim.new(0, 14))
-	stroke(card, Theme.Stroke, 0.94, 1)
+	stroke(card, Theme.Stroke, 0.93, 1)
+
+	local glow = create("ImageLabel", {
+		Size = UDim2.new(1, 40, 1, 40),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Image = GLOW,
+		ImageColor3 = Theme.Accent,
+		ImageTransparency = 0.88,
+		ZIndex = 0,
+		Parent = card
+	})
 
 	local inner = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -354,12 +431,14 @@ function Ecstasy:Notify(o)
 	})
 	pad(inner, 16, 16, 14, 16)
 
-	create("Frame", {
+	local accent = create("Frame", {
 		Size = UDim2.new(0, 3, 1, 0),
 		BackgroundColor3 = Theme.Accent,
 		BorderSizePixel = 0,
 		Parent = inner
 	})
+	corner(accent, UDim.new(0, 2))
+	Ecstasy:RegisterAccent(accent)
 
 	local textCol = create("Frame", {
 		Size = UDim2.new(1, -14, 0, 0),
@@ -404,7 +483,7 @@ function Ecstasy:Notify(o)
 	local progTrack = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 2),
 		BackgroundColor3 = Color3.fromRGB(35, 35, 48),
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.25,
 		BorderSizePixel = 0,
 		Parent = card
 	})
@@ -414,22 +493,23 @@ function Ecstasy:Notify(o)
 		BorderSizePixel = 0,
 		Parent = progTrack
 	})
+	Ecstasy:RegisterAccent(prog)
 
-	local scale = create("UIScale", { Scale = 0.92, Parent = card })
-	wrapper.Position = UDim2.new(1, 30, 0, 0)
+	local scale = create("UIScale", { Scale = 0.88, Parent = card })
+	wrapper.Position = UDim2.new(1, 40, 0, 0)
 	card.GroupTransparency = 1
 
-	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.38, Enum.EasingStyle.Quint)
-	tween(card, { GroupTransparency = 0 }, 0.35, Enum.EasingStyle.Quint)
-	tween(scale, { Scale = 1 }, 0.38, Enum.EasingStyle.Quint)
+	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.32, Enum.EasingStyle.Quint)
+	tween(card, { GroupTransparency = 0 }, 0.28, Enum.EasingStyle.Quint)
+	tween(scale, { Scale = 1 }, 0.34, Enum.EasingStyle.Back)
 	tween(prog, { Size = UDim2.fromScale(0, 1) }, duration, Enum.EasingStyle.Linear)
 
 	task.delay(duration, function()
 		if not wrapper.Parent then return end
-		tween(wrapper, { Position = UDim2.new(1, 40, 0, 0) }, 0.28, Enum.EasingStyle.Quint)
-		tween(card, { GroupTransparency = 1 }, 0.26)
-		tween(scale, { Scale = 0.94 }, 0.26)
-		task.wait(0.3)
+		tween(wrapper, { Position = UDim2.new(1, 48, 0, 0) }, 0.24, Enum.EasingStyle.Quint)
+		tween(card, { GroupTransparency = 1 }, 0.22)
+		tween(scale, { Scale = 0.92 }, 0.22)
+		task.wait(0.26)
 		if wrapper.Parent then wrapper:Destroy() end
 	end)
 end
@@ -437,13 +517,13 @@ end
 local function playLoading(parent, theme, done)
 	local ov = create("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(4, 4, 6),
+		BackgroundColor3 = Color3.fromRGB(3, 3, 5),
 		BackgroundTransparency = 0,
 		ZIndex = 600,
 		Parent = parent
 	})
 
-	for _, L in ipairs({ {220, 0.78}, {360, 0.88}, {520, 0.94} }) do
+	for _, L in ipairs({ {240, 0.75}, {400, 0.86}, {580, 0.93} }) do
 		create("ImageLabel", {
 			Size = UDim2.fromOffset(L[1], L[1]),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -457,86 +537,106 @@ local function playLoading(parent, theme, done)
 		})
 	end
 
-	local glass = create("Frame", {
-		Size = UDim2.fromOffset(280, 160),
+	local glass = create("CanvasGroup", {
+		Size = UDim2.fromOffset(300, 170),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = theme.Surface,
-		BackgroundTransparency = 0.35,
+		BackgroundTransparency = 0.2,
 		BorderSizePixel = 0,
 		ZIndex = 602,
 		Parent = ov
 	})
 	corner(glass, UDim.new(0, 18))
-	stroke(glass, theme.Stroke, 0.9)
-	local glassScale = create("UIScale", { Scale = 0.9, Parent = glass })
+	stroke(glass, theme.Stroke, 0.88)
+	local glassScale = create("UIScale", { Scale = 0.86, Parent = glass })
 
-	local center = create("Frame", {
-		Size = UDim2.fromScale(1, 1),
+	local ring = create("Frame", {
+		Size = UDim2.fromOffset(42, 42),
+		Position = UDim2.new(0.5, 0, 0, 28),
+		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
-		ZIndex = 603,
 		Parent = glass
+	})
+	local ringStroke = create("UIStroke", {
+		Color = theme.Accent,
+		Thickness = 2.5,
+		Transparency = 0.2,
+		Parent = ring
+	})
+	create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ring })
+	create("UIGradient", {
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0),
+			NumberSequenceKeypoint.new(0.6, 0.2),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+		Parent = ringStroke
 	})
 
 	local loadingLabel = create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 24),
-		Position = UDim2.new(0.5, 0, 0.5, -18),
-		AnchorPoint = Vector2.new(0.5, 0.5),
+		Size = UDim2.new(1, 0, 0, 22),
+		Position = UDim2.new(0.5, 0, 0, 88),
+		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
 		Text = "Loading",
 		TextColor3 = theme.Text,
-		TextSize = 18,
+		TextSize = 16,
 		FontFace = FontSemi,
 		TextTransparency = 1,
-		Parent = center
+		Parent = glass
 	})
 	local dots = create("TextLabel", {
-		Size = UDim2.new(0, 36, 0, 24),
-		Position = UDim2.new(0.5, 48, 0.5, -18),
-		AnchorPoint = Vector2.new(0, 0.5),
+		Size = UDim2.new(0, 32, 0, 22),
+		Position = UDim2.new(0.5, 42, 0, 88),
+		AnchorPoint = Vector2.new(0, 0),
 		BackgroundTransparency = 1,
 		Text = "",
 		TextColor3 = theme.Accent,
-		TextSize = 18,
+		TextSize = 16,
 		FontFace = FontSemi,
 		TextTransparency = 1,
-		Parent = center
+		Parent = glass
 	})
 
-	tween(glassScale, { Scale = 1 }, 0.28, Enum.EasingStyle.Quint)
-	tween(glass, { BackgroundTransparency = 0.25 }, 0.28)
-	tween(loadingLabel, { TextTransparency = 0 }, 0.25)
-	tween(dots, { TextTransparency = 0 }, 0.25)
+	local spinConn = RunService.RenderStepped:Connect(function(dt)
+		ring.Rotation = (ring.Rotation + dt * 280) % 360
+	end)
 
-	local dotPatterns = { ".", "..", "..." }
-	local dotIdx = 0
+	tween(glassScale, { Scale = 1 }, 0.28, Enum.EasingStyle.Back)
+	tween(loadingLabel, { TextTransparency = 0 }, 0.2)
+	tween(dots, { TextTransparency = 0 }, 0.2)
+
 	local running = true
+	local patterns = { ".", "..", "..." }
+	local di = 0
 	task.spawn(function()
 		while running do
-			dotIdx = (dotIdx % 3) + 1
-			dots.Text = dotPatterns[dotIdx]
-			task.wait(0.22)
+			di = (di % 3) + 1
+			dots.Text = patterns[di]
+			task.wait(0.18)
 		end
 	end)
 
-	task.wait(0.55)
+	task.wait(0.45)
 	running = false
-	tween(loadingLabel, { TextTransparency = 1 }, 0.15)
-	tween(dots, { TextTransparency = 1 }, 0.15)
-	task.wait(0.12)
+	tween(loadingLabel, { TextTransparency = 1 }, 0.12)
+	tween(dots, { TextTransparency = 1 }, 0.12)
+	tween(ringStroke, { Transparency = 1 }, 0.12)
+	task.wait(0.1)
 
 	local avatar = create("ImageLabel", {
 		Size = UDim2.fromOffset(0, 0),
-		Position = UDim2.new(0.5, 0, 0.5, -22),
+		Position = UDim2.new(0.5, 0, 0.5, -16),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = theme.Surface2,
-		BackgroundTransparency = 0.15,
+		BackgroundTransparency = 0.1,
 		Image = "",
 		ScaleType = Enum.ScaleType.Crop,
-		Parent = center
+		Parent = glass
 	})
 	corner(avatar, UDim.new(1, 0))
-	stroke(avatar, theme.Accent, 0.35, 2)
+	stroke(avatar, theme.Accent, 0.3, 2)
 
 	pcall(function()
 		local content, ready = Players:GetUserThumbnailAsync(
@@ -548,28 +648,27 @@ local function playLoading(parent, theme, done)
 	end)
 
 	local welcome = create("TextLabel", {
-		Size = UDim2.new(1, -20, 0, 20),
+		Size = UDim2.new(1, -24, 0, 18),
 		Position = UDim2.new(0.5, 0, 0.5, 28),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Text = "Welcome, " .. (LocalPlayer.DisplayName or LocalPlayer.Name),
 		TextColor3 = theme.Text,
-		TextSize = 15,
+		TextSize = 14,
 		FontFace = FontSemi,
 		TextTransparency = 1,
-		Parent = center
+		Parent = glass
 	})
 
-	tween(avatar, { Size = UDim2.fromOffset(56, 56) }, 0.28, Enum.EasingStyle.Back)
-	tween(welcome, { TextTransparency = 0 }, 0.22)
-	task.wait(0.55)
+	tween(avatar, { Size = UDim2.fromOffset(52, 52) }, 0.26, Enum.EasingStyle.Back)
+	tween(welcome, { TextTransparency = 0 }, 0.2)
+	task.wait(0.48)
 
-	tween(glassScale, { Scale = 1.06 }, 0.22, Enum.EasingStyle.Quint)
-	tween(glass, { BackgroundTransparency = 1 }, 0.22)
-	tween(avatar, { ImageTransparency = 1, BackgroundTransparency = 1 }, 0.2)
-	tween(welcome, { TextTransparency = 1 }, 0.2)
-	tween(ov, { BackgroundTransparency = 1 }, 0.28)
-	task.wait(0.28)
+	spinConn:Disconnect()
+	tween(glassScale, { Scale = 1.08 }, 0.2, Enum.EasingStyle.Quint)
+	tween(glass, { GroupTransparency = 1 }, 0.22)
+	tween(ov, { BackgroundTransparency = 1 }, 0.25)
+	task.wait(0.26)
 	ov:Destroy()
 	if done then done() end
 end
@@ -581,6 +680,10 @@ function Ecstasy:CreateWindow(opts)
 	opts = opts or {}
 	local theme = opts.Theme or {}
 	for k, v in pairs(Theme) do if theme[k] == nil then theme[k] = v end end
+	if ACCENT_PRESETS[Ecstasy.AccentName] then
+		theme.Accent = ACCENT_PRESETS[Ecstasy.AccentName]
+		Theme.Accent = theme.Accent
+	end
 
 	local win = setmetatable({
 		Name = opts.Name or "ecstasy",
@@ -618,8 +721,9 @@ function Ecstasy:CreateWindow(opts)
 	})
 	win.GlowHost = glowHost
 
+	win._glowLayers = {}
 	for _, L in ipairs({ {110, 0.72}, {180, 0.82}, {260, 0.9} }) do
-		create("ImageLabel", {
+		local gl = create("ImageLabel", {
 			Size = UDim2.new(1, L[1], 1, L[1]),
 			Position = UDim2.fromScale(0.5, 0.5),
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -630,6 +734,7 @@ function Ecstasy:CreateWindow(opts)
 			ZIndex = 0,
 			Parent = glowHost
 		})
+		table.insert(win._glowLayers, gl)
 	end
 	create("ImageLabel", {
 		Size = UDim2.new(1, 60, 1, 60),
@@ -691,7 +796,7 @@ function Ecstasy:CreateWindow(opts)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = top
 	})
-	create("Frame", {
+	win._titleLine = create("Frame", {
 		Size = UDim2.fromOffset(24, 2),
 		Position = UDim2.fromOffset(22, 34),
 		BackgroundColor3 = theme.Accent,
@@ -856,31 +961,31 @@ function Window:Toggle()
 	if self.Visible then
 		Ecstasy:PlayOpen()
 		if shell then
-			shell.Position = UDim2.new(pos.X.Scale, pos.X.Offset + 70, pos.Y.Scale, pos.Y.Offset)
+			shell.Position = UDim2.new(pos.X.Scale, pos.X.Offset + 100, pos.Y.Scale, pos.Y.Offset)
 			shell.Visible = true
 		end
 		if g then
-			g.Position = UDim2.new(pos.X.Scale, pos.X.Offset + 70, pos.Y.Scale, pos.Y.Offset)
+			g.Position = UDim2.new(pos.X.Scale, pos.X.Offset + 100, pos.Y.Scale, pos.Y.Offset)
 			g.Visible = true
 		end
-		s.Scale = 0.96
+		s.Scale = 0.94
 		m.BackgroundTransparency = 1
 		local target = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
-		tween(s, { Scale = 1 }, 0.2, Enum.EasingStyle.Quint)
-		tween(m, { BackgroundTransparency = math.clamp(0.04 + Ecstasy.GlassTransparency, 0, 0.85) }, 0.2)
-		if shell then tween(shell, { Position = target }, 0.2, Enum.EasingStyle.Quint) end
-		if g then tween(g, { Position = target }, 0.2, Enum.EasingStyle.Quint) end
-		if self._blur and self.Blur then tween(self._blur, { Size = 12 }, 0.2) end
-		task.delay(0.22, function() self._toggling = false end)
+		tween(s, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
+		tween(m, { BackgroundTransparency = math.clamp(0.04 + Ecstasy.GlassTransparency, 0, 0.85) }, 0.18)
+		if shell then tween(shell, { Position = target }, 0.18, Enum.EasingStyle.Quint) end
+		if g then tween(g, { Position = target }, 0.18, Enum.EasingStyle.Quint) end
+		if self._blur and self.Blur then tween(self._blur, { Size = 12 }, 0.18) end
+		task.delay(0.2, function() self._toggling = false end)
 	else
 		Ecstasy:PlayClose()
-		local hidePos = UDim2.new(pos.X.Scale, pos.X.Offset + 90, pos.Y.Scale, pos.Y.Offset)
-		tween(s, { Scale = 0.96 }, 0.18, Enum.EasingStyle.Quint)
-		tween(m, { BackgroundTransparency = 1 }, 0.18)
-		if shell then tween(shell, { Position = hidePos }, 0.18, Enum.EasingStyle.Quint) end
-		if g then tween(g, { Position = hidePos }, 0.18, Enum.EasingStyle.Quint) end
-		if self._blur then tween(self._blur, { Size = 0 }, 0.16) end
-		task.delay(0.2, function()
+		local hidePos = UDim2.new(pos.X.Scale, pos.X.Offset + 110, pos.Y.Scale, pos.Y.Offset)
+		tween(s, { Scale = 0.94 }, 0.16, Enum.EasingStyle.Quint)
+		tween(m, { BackgroundTransparency = 1 }, 0.16)
+		if shell then tween(shell, { Position = hidePos }, 0.16, Enum.EasingStyle.Quint) end
+		if g then tween(g, { Position = hidePos }, 0.16, Enum.EasingStyle.Quint) end
+		if self._blur then tween(self._blur, { Size = 0 }, 0.14) end
+		task.delay(0.17, function()
 			if not self.Visible then
 				if shell then
 					shell.Visible = false
@@ -1030,20 +1135,22 @@ end
 function Window:SelectTab(tabOrName)
 	local tab = type(tabOrName) == "string" and self.TabMap[tabOrName] or tabOrName
 	if not tab then return end
+	if tab.Active then return end
+	Ecstasy:PlayTab()
 	for _, t in ipairs(self.Tabs) do
 		t.Active = false
 		t.Page.Visible = false
-		tween(t.Button, { BackgroundTransparency = 1 }, 0.2)
-		tween(t.Label, { TextColor3 = self.Theme.Muted }, 0.2)
-		tween(t.Accent, { BackgroundTransparency = 1 }, 0.2)
-		if t.Icon then tween(t.Icon, { ImageColor3 = self.Theme.Muted }, 0.2) end
+		tween(t.Button, { BackgroundTransparency = 1 }, 0.18)
+		tween(t.Label, { TextColor3 = self.Theme.Muted }, 0.18)
+		tween(t.Accent, { BackgroundTransparency = 1 }, 0.18)
+		if t.Icon then tween(t.Icon, { ImageColor3 = self.Theme.Muted }, 0.18) end
 	end
 	tab.Active = true
 	tab.Page.Visible = true
-	tween(tab.Button, { BackgroundTransparency = 0.38 }, 0.22)
-	tween(tab.Label, { TextColor3 = self.Theme.Text }, 0.22)
-	tween(tab.Accent, { BackgroundTransparency = 0 }, 0.22)
-	if tab.Icon then tween(tab.Icon, { ImageColor3 = self.Theme.Accent }, 0.22) end
+	tween(tab.Button, { BackgroundTransparency = 0.35 }, 0.2)
+	tween(tab.Label, { TextColor3 = self.Theme.Text }, 0.2)
+	tween(tab.Accent, { BackgroundTransparency = 0 }, 0.2)
+	if tab.Icon then tween(tab.Icon, { ImageColor3 = self.Theme.Accent }, 0.2) end
 end
 
 function Window:GetTab(name)
@@ -1103,13 +1210,14 @@ function Tab:CreateSection(opts)
 	return sec
 end
 
-local function el(sec, h)
+local function el(sec, h, order)
 	local th = sec.Theme
 	local c = create("Frame", {
 		Size = UDim2.new(1, 0, 0, h or 46),
 		BackgroundColor3 = th.Surface2,
 		BackgroundTransparency = 0.2 + Ecstasy.GlassTransparency * 0.3,
 		BorderSizePixel = 0,
+		LayoutOrder = order or 0,
 		Parent = sec.List
 	})
 	corner(c, UDim.new(0, 10))
@@ -1118,12 +1226,12 @@ local function el(sec, h)
 	Ecstasy:RegisterGlass(c, 0.2)
 
 	c.MouseEnter:Connect(function()
-		tween(s, { Transparency = 0.72 }, 0.15)
-		tween(c, { BackgroundTransparency = 0.08 }, 0.15)
+		tween(s, { Transparency = 0.65, Color = Theme.Accent }, 0.14)
+		tween(c, { BackgroundTransparency = 0.06 }, 0.14)
 	end)
 	c.MouseLeave:Connect(function()
-		tween(s, { Transparency = 0.92 }, 0.2)
-		tween(c, { BackgroundTransparency = 0.2 + Ecstasy.GlassTransparency * 0.3 }, 0.2)
+		tween(s, { Transparency = 0.92, Color = th.Stroke }, 0.18)
+		tween(c, { BackgroundTransparency = 0.2 + Ecstasy.GlassTransparency * 0.3 }, 0.18)
 	end)
 	return c
 end
@@ -1132,7 +1240,7 @@ function Section:CreateToggle(opts)
 	opts = opts or {}
 	local name, def, cb = opts.Name or "Toggle", opts.Default == true, opts.Callback
 	local th = self.Theme
-	local c = el(self, 46)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
 		Size = UDim2.new(1, -70, 1, 0), Position = UDim2.fromOffset(14, 0),
@@ -1180,7 +1288,7 @@ function Section:CreateButton(opts)
 	opts = opts or {}
 	local name, cb = opts.Name or "Button", opts.Callback
 	local th = self.Theme
-	local c = el(self, 46)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	local btn = create("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = name,
@@ -1198,13 +1306,239 @@ function Section:CreateButton(opts)
 	return {}
 end
 
+function Ecstasy:Confirm(opts)
+	opts = opts or {}
+	local title = opts.Title or "Warning"
+	local content = opts.Content or "Are you sure you want to continue?"
+	local confirmText = opts.ConfirmText or "Confirm"
+	local cancelText = opts.CancelText or "Cancel"
+	local onConfirm = opts.Callback or opts.OnConfirm
+	local onCancel = opts.OnCancel
+	local parentGui = opts.Parent
+	if not parentGui then
+		for _, w in ipairs(self.Windows) do
+			if w.Gui and w.Gui.Parent then parentGui = w.Gui break end
+		end
+	end
+	if not parentGui then parentGui = getParent() end
+
+	local warnColor = Color3.fromRGB(251, 191, 36)
+
+	local overlay = create("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = Color3.new(0, 0, 0),
+		BackgroundTransparency = 1,
+		ZIndex = 500,
+		Parent = parentGui
+	})
+	local card = create("CanvasGroup", {
+		Size = UDim2.fromOffset(320, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = Theme.Surface,
+		BackgroundTransparency = 0.04,
+		BorderSizePixel = 0,
+		GroupTransparency = 1,
+		ZIndex = 501,
+		Parent = overlay
+	})
+	corner(card, UDim.new(0, 16))
+	stroke(card, Theme.Stroke, 0.9)
+	local scale = create("UIScale", { Scale = 0.9, Parent = card })
+	pad(card, 20, 20, 18, 18)
+	create("UIListLayout", {
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 10),
+		Parent = card
+	})
+
+	local iconWrap = create("Frame", {
+		Size = UDim2.fromOffset(44, 44),
+		BackgroundColor3 = warnColor,
+		BackgroundTransparency = 0.85,
+		BorderSizePixel = 0,
+		LayoutOrder = 1,
+		ZIndex = 502,
+		Parent = card
+	})
+	corner(iconWrap, UDim.new(1, 0))
+	stroke(iconWrap, warnColor, 0.5, 1.5)
+
+	create("TextLabel", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = "!",
+		TextColor3 = warnColor,
+		TextSize = 22,
+		FontFace = FontSemi,
+		ZIndex = 503,
+		Parent = iconWrap
+	})
+
+	create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 20),
+		BackgroundTransparency = 1,
+		Text = title,
+		TextColor3 = Theme.Text,
+		TextSize = 15,
+		FontFace = FontSemi,
+		LayoutOrder = 2,
+		ZIndex = 502,
+		Parent = card
+	})
+
+	create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Text = content,
+		TextColor3 = Theme.Muted,
+		TextSize = 13,
+		FontFace = FontRegular,
+		TextWrapped = true,
+		LayoutOrder = 3,
+		ZIndex = 502,
+		Parent = card
+	})
+
+	local btnRow = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 36),
+		BackgroundTransparency = 1,
+		LayoutOrder = 4,
+		ZIndex = 502,
+		Parent = card
+	})
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 10),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = btnRow
+	})
+
+	local function closeModal(confirmed)
+		tween(scale, { Scale = 0.92 }, 0.14)
+		tween(card, { GroupTransparency = 1 }, 0.14)
+		tween(overlay, { BackgroundTransparency = 1 }, 0.14)
+		task.delay(0.16, function()
+			if overlay.Parent then overlay:Destroy() end
+		end)
+		if confirmed then safe(onConfirm) else safe(onCancel) end
+	end
+
+	local cancelBtn = create("TextButton", {
+		Size = UDim2.fromOffset(96, 34),
+		BackgroundColor3 = Theme.Surface3,
+		BackgroundTransparency = 0.25,
+		Text = cancelText,
+		TextColor3 = Theme.Text,
+		TextSize = 13,
+		FontFace = FontMedium,
+		AutoButtonColor = false,
+		ZIndex = 503,
+		Parent = btnRow
+	})
+	corner(cancelBtn, UDim.new(0, 9))
+	stroke(cancelBtn, Theme.Stroke, 0.9)
+
+	local confirmBtn = create("TextButton", {
+		Size = UDim2.fromOffset(108, 34),
+		BackgroundColor3 = warnColor,
+		BackgroundTransparency = 0.12,
+		Text = confirmText,
+		TextColor3 = Color3.fromRGB(20, 16, 8),
+		TextSize = 13,
+		FontFace = FontSemi,
+		AutoButtonColor = false,
+		ZIndex = 503,
+		Parent = btnRow
+	})
+	corner(confirmBtn, UDim.new(0, 9))
+
+	cancelBtn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		closeModal(false)
+	end)
+	confirmBtn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		closeModal(true)
+	end)
+
+	tween(overlay, { BackgroundTransparency = 0.45 }, 0.18)
+	tween(card, { GroupTransparency = 0 }, 0.2, Enum.EasingStyle.Quint)
+	tween(scale, { Scale = 1 }, 0.24, Enum.EasingStyle.Back)
+
+	return {
+		Close = function() closeModal(false) end
+	}
+end
+
+function Section:CreateWarningButton(opts)
+	opts = opts or {}
+	local name = opts.Name or "Warning"
+	local cb = opts.Callback
+	local title = opts.Title or "Warning"
+	local content = opts.Content or "Are you sure you want to continue?"
+	local confirmText = opts.ConfirmText or "Confirm"
+	local cancelText = opts.CancelText or "Cancel"
+	local th = self.Theme
+	local warnColor = Color3.fromRGB(251, 191, 36)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
+
+	local icon = create("TextLabel", {
+		Size = UDim2.fromOffset(22, 22),
+		Position = UDim2.new(0, 12, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = warnColor,
+		BackgroundTransparency = 0.82,
+		Text = "!",
+		TextColor3 = warnColor,
+		TextSize = 14,
+		FontFace = FontSemi,
+		Parent = c
+	})
+	corner(icon, UDim.new(1, 0))
+	stroke(icon, warnColor, 0.45, 1)
+
+	local btn = create("TextButton", {
+		Size = UDim2.new(1, -40, 1, 0),
+		Position = UDim2.fromOffset(38, 0),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = th.Text,
+		TextSize = 13,
+		FontFace = FontMedium,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		AutoButtonColor = false,
+		Parent = c
+	})
+	btn.MouseEnter:Connect(function() tween(btn, { TextColor3 = warnColor }, 0.15) end)
+	btn.MouseLeave:Connect(function() tween(btn, { TextColor3 = th.Text }, 0.2) end)
+	btn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		tween(c, { BackgroundTransparency = 0.05 }, 0.08)
+		task.delay(0.1, function() tween(c, { BackgroundTransparency = 0.2 + Ecstasy.GlassTransparency * 0.3 }, 0.25) end)
+		Ecstasy:Confirm({
+			Title = title,
+			Content = content,
+			ConfirmText = confirmText,
+			CancelText = cancelText,
+			Parent = self.Window and self.Window.Gui,
+			Callback = cb
+		})
+	end)
+	return {}
+end
+
 function Section:CreateSlider(opts)
 	opts = opts or {}
 	local name = opts.Name or "Slider"
 	local min, max, def = opts.Min or 0, opts.Max or 100, opts.Default or opts.Min or 0
 	local dec, cb = opts.Decimals or 0, opts.Callback
 	local th = self.Theme
-	local c = el(self, 60)
+	local c = el(self, 60, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
 		Size = UDim2.new(1, -70, 0, 16), Position = UDim2.fromOffset(14, 8),
@@ -1272,7 +1606,7 @@ function Section:CreateDropdown(opts)
 	local cb = opts.Callback
 	local th = self.Theme
 	local win = self.Window
-	local c = el(self, 46)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
 		Size = UDim2.new(0.4, 0, 1, 0), Position = UDim2.fromOffset(14, 0),
@@ -1440,7 +1774,7 @@ function Section:CreateKeybind(opts)
 	opts = opts or {}
 	local name, def, cb = opts.Name or "Keybind", opts.Default or Enum.KeyCode.E, opts.Callback
 	local th = self.Theme
-	local c = el(self, 46)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
 		Size = UDim2.new(1, -100, 1, 0), Position = UDim2.fromOffset(14, 0),
@@ -1482,7 +1816,7 @@ function Section:CreateColorPicker(opts)
 	opts = opts or {}
 	local name, def, cb = opts.Name or "Color", opts.Default or Theme.Accent, opts.Callback
 	local th = self.Theme
-	local c = el(self, 46)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
 		Size = UDim2.new(1, -56, 1, 0), Position = UDim2.fromOffset(14, 0),
@@ -1523,7 +1857,7 @@ function Section:CreateTextBox(opts)
 	local ph = opts.Placeholder or "..."
 	local cb = opts.Callback
 	local th = self.Theme
-	local c = el(self, 46)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 
 	create("TextLabel", {
 		Size = UDim2.new(0.36, 0, 1, 0), Position = UDim2.fromOffset(14, 0),
@@ -1665,7 +1999,7 @@ function Section:CreateProgressBar(opts)
 	local name = opts.Name or "Progress"
 	local value = math.clamp(opts.Value or 0, 0, 1)
 	local th = self.Theme
-	local c = el(self, 56)
+	local c = el(self, 56, opts.Order or opts.LayoutOrder)
 	create("TextLabel", {
 		Size = UDim2.new(1, -70, 0, 16), Position = UDim2.fromOffset(14, 8),
 		BackgroundTransparency = 1, Text = name, TextColor3 = th.Text,
@@ -1833,7 +2167,7 @@ function Section:CreateSearch(opts)
 	local ph = opts.Placeholder or "Search..."
 	local cb = opts.Callback
 	local th = self.Theme
-	local c = el(self, 46)
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
 	local box = create("TextBox", {
 		Size = UDim2.new(1, -28, 0, 30),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
@@ -1917,6 +2251,15 @@ function Window:CreateSettingsTab()
 			if self._blur then
 				tween(self._blur, { Size = v and (self.Visible and 12 or 0) or 0 }, 0.25)
 			end
+		end
+	})
+
+	left:CreateDropdown({
+		Name = "Accent Color",
+		Options = { "Purple", "Red", "White" },
+		Default = Ecstasy.AccentName or "Purple",
+		Callback = function(opt)
+			Ecstasy:SetAccent(opt)
 		end
 	})
 
@@ -2012,6 +2355,16 @@ function Window:CreatePremadeTab(opts)
 	R:CreateImageButton({ Name = "Quick Action", Image = "rbxassetid://6031094678", Height = 48, Callback = function()
 		Ecstasy:Notify({ Title = "ecstasy", Content = "Looking clean.", Duration = 3 })
 	end })
+	R:CreateWarningButton({
+		Name = "Danger Action",
+		Title = "Warning",
+		Content = "Are you sure you want to run this?",
+		ConfirmText = "Yes",
+		CancelText = "No",
+		Callback = function()
+			Ecstasy:Notify({ Title = "Confirmed", Content = "Action ran.", Duration = 3 })
+		end
+	})
 	R:CreateButton({ Name = "Open Settings", Callback = function()
 		self:SelectTab("Settings")
 	end })
