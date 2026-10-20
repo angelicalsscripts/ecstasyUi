@@ -109,8 +109,14 @@ local function mkSound(id, vol)
 	return s
 end
 
-local ClickSnd = mkSound("rbxassetid://6895079853", 0.2)
-local NotifySnd = mkSound("rbxassetid://9117411570", 0.16)
+local ClickSnd = mkSound("rbxassetid://10066991788", 0.18)
+ClickSnd.PlaybackSpeed = 1.15
+local NotifySnd = mkSound("rbxassetid://4590662766", 0.14)
+NotifySnd.PlaybackSpeed = 1.05
+local OpenSnd = mkSound("rbxassetid://9117422732", 0.12)
+OpenSnd.PlaybackSpeed = 1.2
+local CloseSnd = mkSound("rbxassetid://9117422732", 0.1)
+CloseSnd.PlaybackSpeed = 0.85
 
 local Ecstasy = {
 	Windows = {},
@@ -178,15 +184,33 @@ loadConfig()
 
 function Ecstasy:PlayClick()
 	if self.SoundEnabled and self.ClickSounds then
-		ClickSnd.Volume = self.SoundVolume
+		ClickSnd.Volume = self.SoundVolume * 0.85
+		ClickSnd.TimePosition = 0
 		ClickSnd:Play()
 	end
 end
 
 function Ecstasy:PlayNotify()
 	if self.SoundEnabled and self.NotifySounds then
-		NotifySnd.Volume = self.SoundVolume * 0.85
+		NotifySnd.Volume = self.SoundVolume * 0.7
+		NotifySnd.TimePosition = 0
 		NotifySnd:Play()
+	end
+end
+
+function Ecstasy:PlayOpen()
+	if self.SoundEnabled and self.ClickSounds then
+		OpenSnd.Volume = self.SoundVolume * 0.55
+		OpenSnd.TimePosition = 0
+		OpenSnd:Play()
+	end
+end
+
+function Ecstasy:PlayClose()
+	if self.SoundEnabled and self.ClickSounds then
+		CloseSnd.Volume = self.SoundVolume * 0.45
+		CloseSnd.TimePosition = 0
+		CloseSnd:Play()
 	end
 end
 
@@ -413,48 +437,76 @@ end
 local function playLoading(parent, theme, done)
 	local ov = create("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(5, 5, 7),
+		BackgroundColor3 = Color3.fromRGB(4, 4, 6),
 		BackgroundTransparency = 0,
 		ZIndex = 600,
 		Parent = parent
 	})
-	local center = create("Frame", {
-		Size = UDim2.fromOffset(340, 260),
+
+	for _, L in ipairs({ {220, 0.78}, {360, 0.88}, {520, 0.94} }) do
+		create("ImageLabel", {
+			Size = UDim2.fromOffset(L[1], L[1]),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Image = GLOW,
+			ImageColor3 = theme.Accent,
+			ImageTransparency = L[2],
+			ZIndex = 601,
+			Parent = ov
+		})
+	end
+
+	local glass = create("Frame", {
+		Size = UDim2.fromOffset(280, 160),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
+		BackgroundColor3 = theme.Surface,
+		BackgroundTransparency = 0.35,
+		BorderSizePixel = 0,
+		ZIndex = 602,
 		Parent = ov
 	})
-	local scaleObj = create("UIScale", { Scale = 1, Parent = center })
+	corner(glass, UDim.new(0, 18))
+	stroke(glass, theme.Stroke, 0.9)
+	local glassScale = create("UIScale", { Scale = 0.9, Parent = glass })
+
+	local center = create("Frame", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		ZIndex = 603,
+		Parent = glass
+	})
 
 	local loadingLabel = create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 28),
-		Position = UDim2.new(0.5, 0, 0.5, -20),
+		Size = UDim2.new(1, 0, 0, 24),
+		Position = UDim2.new(0.5, 0, 0.5, -18),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Text = "Loading",
 		TextColor3 = theme.Text,
-		TextSize = 22,
+		TextSize = 18,
 		FontFace = FontSemi,
 		TextTransparency = 1,
 		Parent = center
 	})
-
 	local dots = create("TextLabel", {
-		Size = UDim2.new(0, 40, 0, 28),
-		Position = UDim2.new(0.5, 55, 0.5, -20),
+		Size = UDim2.new(0, 36, 0, 24),
+		Position = UDim2.new(0.5, 48, 0.5, -18),
 		AnchorPoint = Vector2.new(0, 0.5),
 		BackgroundTransparency = 1,
 		Text = "",
 		TextColor3 = theme.Accent,
-		TextSize = 22,
+		TextSize = 18,
 		FontFace = FontSemi,
 		TextTransparency = 1,
 		Parent = center
 	})
 
-	tween(loadingLabel, { TextTransparency = 0 }, 0.4)
-	tween(dots, { TextTransparency = 0 }, 0.4)
+	tween(glassScale, { Scale = 1 }, 0.28, Enum.EasingStyle.Quint)
+	tween(glass, { BackgroundTransparency = 0.25 }, 0.28)
+	tween(loadingLabel, { TextTransparency = 0 }, 0.25)
+	tween(dots, { TextTransparency = 0 }, 0.25)
 
 	local dotPatterns = { ".", "..", "..." }
 	local dotIdx = 0
@@ -463,28 +515,28 @@ local function playLoading(parent, theme, done)
 		while running do
 			dotIdx = (dotIdx % 3) + 1
 			dots.Text = dotPatterns[dotIdx]
-			task.wait(0.35)
+			task.wait(0.22)
 		end
 	end)
 
-	task.wait(1.4)
+	task.wait(0.55)
 	running = false
-	tween(loadingLabel, { TextTransparency = 1 }, 0.3)
-	tween(dots, { TextTransparency = 1 }, 0.3)
-	task.wait(0.35)
+	tween(loadingLabel, { TextTransparency = 1 }, 0.15)
+	tween(dots, { TextTransparency = 1 }, 0.15)
+	task.wait(0.12)
 
 	local avatar = create("ImageLabel", {
 		Size = UDim2.fromOffset(0, 0),
-		Position = UDim2.new(0.5, 0, 0.5, -40),
+		Position = UDim2.new(0.5, 0, 0.5, -22),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = theme.Surface2,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = 0.15,
 		Image = "",
 		ScaleType = Enum.ScaleType.Crop,
 		Parent = center
 	})
 	corner(avatar, UDim.new(1, 0))
-	stroke(avatar, theme.Accent, 0.4, 2)
+	stroke(avatar, theme.Accent, 0.35, 2)
 
 	pcall(function()
 		local content, ready = Players:GetUserThumbnailAsync(
@@ -496,42 +548,28 @@ local function playLoading(parent, theme, done)
 	end)
 
 	local welcome = create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 24),
-		Position = UDim2.new(0.5, 0, 0.5, 30),
+		Size = UDim2.new(1, -20, 0, 20),
+		Position = UDim2.new(0.5, 0, 0.5, 28),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Text = "Welcome, " .. (LocalPlayer.DisplayName or LocalPlayer.Name),
 		TextColor3 = theme.Text,
-		TextSize = 18,
+		TextSize = 15,
 		FontFace = FontSemi,
 		TextTransparency = 1,
 		Parent = center
 	})
 
-	local sub = create("TextLabel", {
-		Size = UDim2.new(1, 0, 0, 16),
-		Position = UDim2.new(0.5, 0, 0.5, 52),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundTransparency = 1,
-		Text = "ecstasy",
-		TextColor3 = theme.Accent,
-		TextSize = 13,
-		FontFace = FontMedium,
-		TextTransparency = 1,
-		Parent = center
-	})
+	tween(avatar, { Size = UDim2.fromOffset(56, 56) }, 0.28, Enum.EasingStyle.Back)
+	tween(welcome, { TextTransparency = 0 }, 0.22)
+	task.wait(0.55)
 
-	tween(avatar, { Size = UDim2.fromOffset(72, 72) }, 0.45, Enum.EasingStyle.Back)
-	tween(welcome, { TextTransparency = 0 }, 0.4)
-	tween(sub, { TextTransparency = 0 }, 0.45)
-	task.wait(1.1)
-
-	tween(scaleObj, { Scale = 1.12 }, 0.35, Enum.EasingStyle.Quint)
-	tween(avatar, { ImageTransparency = 1, BackgroundTransparency = 1 }, 0.3)
-	tween(welcome, { TextTransparency = 1 }, 0.3)
-	tween(sub, { TextTransparency = 1 }, 0.3)
-	tween(ov, { BackgroundTransparency = 1 }, 0.4)
-	task.wait(0.42)
+	tween(glassScale, { Scale = 1.06 }, 0.22, Enum.EasingStyle.Quint)
+	tween(glass, { BackgroundTransparency = 1 }, 0.22)
+	tween(avatar, { ImageTransparency = 1, BackgroundTransparency = 1 }, 0.2)
+	tween(welcome, { TextTransparency = 1 }, 0.2)
+	tween(ov, { BackgroundTransparency = 1 }, 0.28)
+	task.wait(0.28)
 	ov:Destroy()
 	if done then done() end
 end
@@ -813,24 +851,46 @@ function Window:Toggle()
 	local shell = self.MainShell
 	local g = self.GlowHost
 	local s = self._mainScale
+	local pos = shell and shell.Position or m.Position
 
 	if self.Visible then
-		if shell then shell.Visible = true end
-		if g then g.Visible = true end
-		s.Scale = 0.94
+		Ecstasy:PlayOpen()
+		if shell then
+			shell.Position = UDim2.new(pos.X.Scale, pos.X.Offset + 70, pos.Y.Scale, pos.Y.Offset)
+			shell.Visible = true
+		end
+		if g then
+			g.Position = UDim2.new(pos.X.Scale, pos.X.Offset + 70, pos.Y.Scale, pos.Y.Offset)
+			g.Visible = true
+		end
+		s.Scale = 0.96
 		m.BackgroundTransparency = 1
-		tween(s, { Scale = 1 }, 0.32, Enum.EasingStyle.Quint)
-		tween(m, { BackgroundTransparency = math.clamp(0.04 + Ecstasy.GlassTransparency, 0, 0.85) }, 0.32)
-		if self._blur then tween(self._blur, { Size = 12 }, 0.3) end
-		task.delay(0.35, function() self._toggling = false end)
+		local target = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset)
+		tween(s, { Scale = 1 }, 0.2, Enum.EasingStyle.Quint)
+		tween(m, { BackgroundTransparency = math.clamp(0.04 + Ecstasy.GlassTransparency, 0, 0.85) }, 0.2)
+		if shell then tween(shell, { Position = target }, 0.2, Enum.EasingStyle.Quint) end
+		if g then tween(g, { Position = target }, 0.2, Enum.EasingStyle.Quint) end
+		if self._blur and self.Blur then tween(self._blur, { Size = 12 }, 0.2) end
+		task.delay(0.22, function() self._toggling = false end)
 	else
-		tween(s, { Scale = 0.94 }, 0.28, Enum.EasingStyle.Quint)
-		tween(m, { BackgroundTransparency = 1 }, 0.28)
-		if self._blur then tween(self._blur, { Size = 0 }, 0.25) end
-		task.delay(0.3, function()
+		Ecstasy:PlayClose()
+		local hidePos = UDim2.new(pos.X.Scale, pos.X.Offset + 90, pos.Y.Scale, pos.Y.Offset)
+		tween(s, { Scale = 0.96 }, 0.18, Enum.EasingStyle.Quint)
+		tween(m, { BackgroundTransparency = 1 }, 0.18)
+		if shell then tween(shell, { Position = hidePos }, 0.18, Enum.EasingStyle.Quint) end
+		if g then tween(g, { Position = hidePos }, 0.18, Enum.EasingStyle.Quint) end
+		if self._blur then tween(self._blur, { Size = 0 }, 0.16) end
+		task.delay(0.2, function()
 			if not self.Visible then
-				if shell then shell.Visible = false end
-				if g then g.Visible = false end
+				if shell then
+					shell.Visible = false
+					shell.Position = pos
+				end
+				if g then
+					g.Visible = false
+					g.Position = pos
+				end
+				s.Scale = 1
 			end
 			self._toggling = false
 		end)
@@ -1596,6 +1656,208 @@ function Section:CreateImageButton(opts)
 	}
 end
 
+function Section:CreateCheckbox(opts)
+	return self:CreateToggle(opts)
+end
+
+function Section:CreateProgressBar(opts)
+	opts = opts or {}
+	local name = opts.Name or "Progress"
+	local value = math.clamp(opts.Value or 0, 0, 1)
+	local th = self.Theme
+	local c = el(self, 56)
+	create("TextLabel", {
+		Size = UDim2.new(1, -70, 0, 16), Position = UDim2.fromOffset(14, 8),
+		BackgroundTransparency = 1, Text = name, TextColor3 = th.Text,
+		TextSize = 13, FontFace = FontRegular, TextXAlignment = Enum.TextXAlignment.Left, Parent = c
+	})
+	local pct = create("TextLabel", {
+		Size = UDim2.new(0, 50, 0, 16), Position = UDim2.new(1, -60, 0, 8),
+		BackgroundTransparency = 1, Text = math.floor(value * 100) .. "%", TextColor3 = th.Accent,
+		TextSize = 12, FontFace = FontMedium, TextXAlignment = Enum.TextXAlignment.Right, Parent = c
+	})
+	local bar = create("Frame", {
+		Size = UDim2.new(1, -28, 0, 6), Position = UDim2.fromOffset(14, 36),
+		BackgroundColor3 = th.Surface3, BorderSizePixel = 0, Parent = c
+	})
+	corner(bar, UDim.new(1, 0))
+	local fill = create("Frame", {
+		Size = UDim2.new(value, 0, 1, 0), BackgroundColor3 = th.Accent, BorderSizePixel = 0, Parent = bar
+	})
+	corner(fill, UDim.new(1, 0))
+	return {
+		Set = function(_, v)
+			v = math.clamp(v, 0, 1)
+			value = v
+			tween(fill, { Size = UDim2.new(v, 0, 1, 0) }, 0.2)
+			pct.Text = math.floor(v * 100) .. "%"
+		end,
+		Get = function() return value end
+	}
+end
+
+function Section:CreateList(opts)
+	opts = opts or {}
+	local name = opts.Name or "List"
+	local items = opts.Items or opts.Options or {}
+	local multi = opts.MultiSelect == true
+	local cb = opts.Callback
+	local th = self.Theme
+	local height = math.min(28 + #items * 30 + 12, 180)
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, height),
+		BackgroundColor3 = th.Surface2,
+		BackgroundTransparency = 0.2 + Ecstasy.GlassTransparency * 0.3,
+		BorderSizePixel = 0,
+		Parent = self.List
+	})
+	corner(c, UDim.new(0, 10))
+	stroke(c, th.Stroke, 0.92)
+	Ecstasy:RegisterGlass(c, 0.2)
+	pad(c, 10, 10, 8, 8)
+
+	create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 16),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = th.Accent,
+		TextSize = 11,
+		FontFace = FontSemi,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = c
+	})
+
+	local sc = create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -20),
+		Position = UDim2.fromOffset(0, 20),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 2,
+		ScrollBarImageColor3 = th.Accent,
+		CanvasSize = UDim2.new(0, 0, 0, #items * 30),
+		Parent = c
+	})
+	create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2), Parent = sc })
+
+	local selected = multi and {} or nil
+	if multi then
+		for _, it in ipairs(items) do selected[it] = false end
+	elseif #items > 0 then
+		selected = items[1]
+	end
+
+	local function refresh()
+		for _, child in ipairs(sc:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+		for _, it in ipairs(items) do
+			local isOn = multi and selected[it] or selected == it
+			local b = create("TextButton", {
+				Size = UDim2.new(1, 0, 0, 28),
+				BackgroundColor3 = th.Surface3,
+				BackgroundTransparency = isOn and 0.35 or 1,
+				Text = "",
+				AutoButtonColor = false,
+				Parent = sc
+			})
+			corner(b, UDim.new(0, 7))
+			local t = create("TextLabel", {
+				Size = UDim2.new(1, -12, 1, 0),
+				Position = UDim2.fromOffset(10, 0),
+				BackgroundTransparency = 1,
+				Text = tostring(it),
+				TextColor3 = isOn and th.Accent or th.Text,
+				TextSize = 12,
+				FontFace = isOn and FontMedium or FontRegular,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Parent = b
+			})
+			b.MouseEnter:Connect(function()
+				if not isOn then tween(b, { BackgroundTransparency = 0.55 }, 0.12) end
+			end)
+			b.MouseLeave:Connect(function()
+				local on = multi and selected[it] or selected == it
+				tween(b, { BackgroundTransparency = on and 0.35 or 1 }, 0.12)
+			end)
+			b.MouseButton1Click:Connect(function()
+				Ecstasy:PlayClick()
+				if multi then
+					selected[it] = not selected[it]
+					local list = {}
+					for _, x in ipairs(items) do if selected[x] then table.insert(list, x) end end
+					safe(cb, list)
+				else
+					selected = it
+					safe(cb, it)
+				end
+				refresh()
+			end)
+		end
+	end
+	refresh()
+
+	return {
+		SetItems = function(_, list)
+			items = list or items
+			sc.CanvasSize = UDim2.new(0, 0, 0, #items * 30)
+			if multi then
+				selected = {}
+				for _, it in ipairs(items) do selected[it] = false end
+			elseif #items > 0 then
+				selected = items[1]
+			end
+			refresh()
+		end,
+		Get = function()
+			if multi then
+				local list = {}
+				for _, x in ipairs(items) do if selected[x] then table.insert(list, x) end end
+				return list
+			end
+			return selected
+		end,
+		Set = function(_, v)
+			if multi and type(v) == "table" then
+				for k in pairs(selected) do selected[k] = false end
+				for _, x in ipairs(v) do selected[x] = true end
+			else
+				selected = v
+			end
+			refresh()
+		end
+	}
+end
+
+function Section:CreateSearch(opts)
+	opts = opts or {}
+	local ph = opts.Placeholder or "Search..."
+	local cb = opts.Callback
+	local th = self.Theme
+	local c = el(self, 46)
+	local box = create("TextBox", {
+		Size = UDim2.new(1, -28, 0, 30),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = th.Surface3,
+		BackgroundTransparency = 0.2,
+		Text = "",
+		PlaceholderText = ph,
+		PlaceholderColor3 = th.Muted,
+		TextColor3 = th.Text,
+		TextSize = 12,
+		FontFace = FontRegular,
+		ClearTextOnFocus = false,
+		Parent = c
+	})
+	corner(box, UDim.new(0, 8))
+	stroke(box, th.Stroke, 0.9)
+	pad(box, 10, 10, 0, 0)
+	box:GetPropertyChangedSignal("Text"):Connect(function()
+		safe(cb, box.Text)
+	end)
+	return { Set = function(_, t) box.Text = tostring(t) end, Get = function() return box.Text end }
+end
+
 function Section:CreateDivider(opts)
 	local th = self.Theme
 	local c = create("Frame", {
@@ -1734,18 +1996,20 @@ function Window:CreatePremadeTab(opts)
 
 	L:CreateToggle({ Name = "Feature", Default = false, Callback = print })
 	L:CreateSlider({ Name = "Value", Min = 0, Max = 100, Default = 50, Callback = print })
+	L:CreateProgressBar({ Name = "Load", Value = 0.65 })
 	L:CreateButton({ Name = "Action", Callback = function()
 		Ecstasy:Notify({ Title = "Done", Content = "Action completed.", Duration = 3 })
 	end })
 	L:CreateDropdown({ Name = "Mode", Options = { "Normal", "Fast", "Silent" }, Default = "Normal", Callback = print })
+	L:CreateSearch({ Placeholder = "Search...", Callback = print })
 	L:CreateDivider()
-	L:CreateLabel({ Text = "Use Settings tab for UI options." })
+	L:CreateLabel({ Text = "Use Settings for UI options." })
 
+	R:CreateList({ Name = "Targets", Items = { "Player1", "Player2", "NPC" }, MultiSelect = false, Callback = print })
 	R:CreateKeybind({ Name = "Key", Default = Enum.KeyCode.E, Callback = function(k) print(k.Name) end })
 	R:CreateColorPicker({ Name = "Color", Default = Theme.Accent, Callback = print })
 	R:CreateTextBox({ Name = "Name", Placeholder = "Type...", Callback = print })
-	R:CreateImage({ Image = "rbxassetid://6031094678", Height = 80 })
-	R:CreateButton({ Name = "Notify", Callback = function()
+	R:CreateImageButton({ Name = "Quick Action", Image = "rbxassetid://6031094678", Height = 48, Callback = function()
 		Ecstasy:Notify({ Title = "ecstasy", Content = "Looking clean.", Duration = 3 })
 	end })
 	R:CreateButton({ Name = "Open Settings", Callback = function()
