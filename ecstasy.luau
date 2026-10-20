@@ -95,9 +95,14 @@ local Theme = {
 
 local ACCENT_PRESETS = {
 	Purple = Color3.fromRGB(168, 85, 247),
-	Red = Color3.fromRGB(239, 68, 68),
-	White = Color3.fromRGB(245, 245, 250),
+	Red = Color3.fromRGB(255, 55, 55),
+	White = Color3.fromRGB(255, 255, 255),
 }
+
+local function colorClose(a, b)
+	if typeof(a) ~= "Color3" or typeof(b) ~= "Color3" then return false end
+	return math.abs(a.R - b.R) < 0.04 and math.abs(a.G - b.G) < 0.04 and math.abs(a.B - b.B) < 0.04
+end
 
 local GLOW = "rbxassetid://8992230677"
 local SHADOW = "rbxassetid://6014261993"
@@ -281,8 +286,68 @@ end
 function Ecstasy:SetAccent(name)
 	local col = ACCENT_PRESETS[name]
 	if not col then return end
+	local old = Theme.Accent
 	self.AccentName = name
 	Theme.Accent = col
+
+	local function recolorRoot(root)
+		if not root then return end
+		local nodes = { root }
+		pcall(function()
+			for _, d in ipairs(root:GetDescendants()) do
+				table.insert(nodes, d)
+			end
+		end)
+		for _, d in ipairs(nodes) do
+			if d:GetAttribute("EcstasyAccent") then
+				local prop = d:GetAttribute("EcstasyAccentProp") or "BackgroundColor3"
+				pcall(function() d[prop] = col end)
+			else
+				pcall(function()
+					if d:IsA("GuiObject") then
+						if colorClose(d.BackgroundColor3, old) then
+							d.BackgroundColor3 = col
+						end
+						if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
+							if colorClose(d.TextColor3, old) then
+								d.TextColor3 = col
+							end
+						end
+						if d:IsA("ImageLabel") or d:IsA("ImageButton") then
+							if colorClose(d.ImageColor3, old) then
+								d.ImageColor3 = col
+							end
+						end
+						if d:IsA("ScrollingFrame") then
+							if colorClose(d.ScrollBarImageColor3, old) then
+								d.ScrollBarImageColor3 = col
+							end
+						end
+					elseif d:IsA("UIStroke") then
+						if colorClose(d.Color, old) then
+							d.Color = col
+						end
+					elseif d:IsA("UIGradient") then
+						local seq = d.Color.Keypoints
+						local changed = false
+						local keys = {}
+						for _, kp in ipairs(seq) do
+							local c = kp.Value
+							if colorClose(c, old) then
+								c = col
+								changed = true
+							end
+							table.insert(keys, ColorSequenceKeypoint.new(kp.Time, c))
+						end
+						if changed then
+							d.Color = ColorSequence.new(keys)
+						end
+					end
+				end)
+			end
+		end
+	end
+
 	for _, win in ipairs(self.Windows) do
 		if win.Theme then win.Theme.Accent = col end
 		if win._glowLayers then
@@ -293,10 +358,11 @@ function Ecstasy:SetAccent(name)
 		if win._titleLine and win._titleLine.Parent then
 			win._titleLine.BackgroundColor3 = col
 		end
-		applyAccentToTree(win.Gui, col)
-		applyAccentToTree(win.GlowHost, col)
+		recolorRoot(win.Gui)
+		recolorRoot(win.GlowHost)
+		recolorRoot(win.MainShell)
 	end
-	applyAccentToTree(NGui, col)
+	recolorRoot(NGui)
 	for _, entry in ipairs(self._accentObjects) do
 		if entry.obj and entry.obj.Parent and not entry.locked then
 			pcall(function() entry.obj[entry.prop] = col end)
@@ -880,6 +946,7 @@ function Ecstasy:CreateWindow(opts)
 		BorderSizePixel = 0,
 		Parent = top
 	})
+	Ecstasy:RegisterAccent(win._titleLine)
 	if win.SubTitle ~= "" then
 		create("TextLabel", {
 			Size = UDim2.new(1, -140, 0, 14),
@@ -1262,16 +1329,18 @@ function Tab:CreateSection(opts)
 	sec.Frame = frame
 	Ecstasy:RegisterGlass(frame, 0.12)
 
-	create("TextLabel", {
+	local secTitle = create("TextLabel", {
 		Size = UDim2.new(1, 0, 0, 16),
 		BackgroundTransparency = 1,
 		Text = name,
-		TextColor3 = self.Window.Theme.Accent,
+		TextColor3 = Theme.Accent,
 		TextSize = 12,
 		FontFace = FontSemi,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Parent = frame
 	})
+	Ecstasy:RegisterAccent(secTitle, "TextColor3")
+	sec.Title = secTitle
 
 	local list = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
