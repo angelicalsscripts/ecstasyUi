@@ -145,6 +145,7 @@ local Ecstasy = {
 	AccentName = "Purple",
 	_glassObjects = {},
 	_accentObjects = {},
+	_accentRefreshers = {},
 }
 
 local function getParent()
@@ -267,6 +268,12 @@ function Ecstasy:TagAccent(obj, prop)
 	self:RegisterAccent(obj, prop)
 end
 
+function Ecstasy:OnAccentChange(fn)
+	if type(fn) == "function" then
+		table.insert(self._accentRefreshers, fn)
+	end
+end
+
 local function applyAccentToTree(root, col)
 	if not root then return end
 	local list = { root }
@@ -286,67 +293,8 @@ end
 function Ecstasy:SetAccent(name)
 	local col = ACCENT_PRESETS[name]
 	if not col then return end
-	local old = Theme.Accent
 	self.AccentName = name
 	Theme.Accent = col
-
-	local function recolorRoot(root)
-		if not root then return end
-		local nodes = { root }
-		pcall(function()
-			for _, d in ipairs(root:GetDescendants()) do
-				table.insert(nodes, d)
-			end
-		end)
-		for _, d in ipairs(nodes) do
-			if d:GetAttribute("EcstasyAccent") then
-				local prop = d:GetAttribute("EcstasyAccentProp") or "BackgroundColor3"
-				pcall(function() d[prop] = col end)
-			else
-				pcall(function()
-					if d:IsA("GuiObject") then
-						if colorClose(d.BackgroundColor3, old) then
-							d.BackgroundColor3 = col
-						end
-						if d:IsA("TextLabel") or d:IsA("TextButton") or d:IsA("TextBox") then
-							if colorClose(d.TextColor3, old) then
-								d.TextColor3 = col
-							end
-						end
-						if d:IsA("ImageLabel") or d:IsA("ImageButton") then
-							if colorClose(d.ImageColor3, old) then
-								d.ImageColor3 = col
-							end
-						end
-						if d:IsA("ScrollingFrame") then
-							if colorClose(d.ScrollBarImageColor3, old) then
-								d.ScrollBarImageColor3 = col
-							end
-						end
-					elseif d:IsA("UIStroke") then
-						if colorClose(d.Color, old) then
-							d.Color = col
-						end
-					elseif d:IsA("UIGradient") then
-						local seq = d.Color.Keypoints
-						local changed = false
-						local keys = {}
-						for _, kp in ipairs(seq) do
-							local c = kp.Value
-							if colorClose(c, old) then
-								c = col
-								changed = true
-							end
-							table.insert(keys, ColorSequenceKeypoint.new(kp.Time, c))
-						end
-						if changed then
-							d.Color = ColorSequence.new(keys)
-						end
-					end
-				end)
-			end
-		end
-	end
 
 	for _, win in ipairs(self.Windows) do
 		if win.Theme then win.Theme.Accent = col end
@@ -357,17 +305,27 @@ function Ecstasy:SetAccent(name)
 		end
 		if win._titleLine and win._titleLine.Parent then
 			win._titleLine.BackgroundColor3 = col
+			pcall(function()
+				win._titleLine:SetAttribute("EcstasyAccent", true)
+				win._titleLine:SetAttribute("EcstasyAccentProp", "BackgroundColor3")
+			end)
 		end
-		recolorRoot(win.Gui)
-		recolorRoot(win.GlowHost)
-		recolorRoot(win.MainShell)
+		applyAccentToTree(win.Gui, col)
+		applyAccentToTree(win.GlowHost, col)
+		applyAccentToTree(win.MainShell, col)
 	end
-	recolorRoot(NGui)
+	applyAccentToTree(NGui, col)
+
 	for _, entry in ipairs(self._accentObjects) do
 		if entry.obj and entry.obj.Parent and not entry.locked then
 			pcall(function() entry.obj[entry.prop] = col end)
 		end
 	end
+
+	for _, fn in ipairs(self._accentRefreshers) do
+		pcall(fn, col)
+	end
+
 	saveConfig()
 end
 
@@ -1401,7 +1359,6 @@ function Section:CreateToggle(opts)
 		BorderSizePixel = 0, Parent = c
 	})
 	corner(track, UDim.new(1, 0))
-	if not locked then Ecstasy:RegisterAccent(track) end
 	local knob = create("Frame", {
 		Size = UDim2.fromOffset(18, 18), Position = UDim2.fromOffset(3, 3),
 		BackgroundColor3 = th.Muted, BorderSizePixel = 0, Parent = track
@@ -1414,7 +1371,7 @@ function Section:CreateToggle(opts)
 		local col = locked and accentCol or Theme.Accent
 		if state then
 			tween(track, { BackgroundColor3 = col }, 0.2)
-			tween(knob, { Position = UDim2.fromOffset(23, 3), BackgroundColor3 = Color3.new(1, 1, 1) }, 0.2)
+			tween(knob, { Position = UDim2.fromOffset(23, 3), BackgroundColor3 = Color3.fromRGB(255, 255, 255) }, 0.2)
 		else
 			tween(track, { BackgroundColor3 = th.Surface3 }, 0.2)
 			tween(knob, { Position = UDim2.fromOffset(3, 3), BackgroundColor3 = th.Muted }, 0.2)
@@ -1422,6 +1379,14 @@ function Section:CreateToggle(opts)
 		if fire ~= false then safe(cb, state) end
 	end
 	set(def, false)
+	if not locked then
+		Ecstasy:OnAccentChange(function()
+			if state then
+				track.BackgroundColor3 = Theme.Accent
+				knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+			end
+		end)
+	end
 
 	create("TextButton", {
 		Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Parent = c
@@ -1770,6 +1735,12 @@ function Section:CreateSlider(opts)
 		if fire ~= false then safe(cb, v) end
 	end
 	set(def, false)
+	if not locked then
+		Ecstasy:OnAccentChange(function(col)
+			fill.BackgroundColor3 = col
+			val.TextColor3 = col
+		end)
+	end
 
 	local sliding = false
 	local function upd(inp)
@@ -2926,6 +2897,244 @@ function Section:CreateButtonRow(opts)
 			Ecstasy:PlayClick()
 			safe(bopts.Callback)
 		end)
+	end
+	return {}
+end
+
+function Section:CreateSegmented(opts)
+	opts = opts or {}
+	local name = opts.Name or "Segment"
+	local options = opts.Options or { "One", "Two", "Three" }
+	local selected = opts.Default or options[1]
+	local cb = opts.Callback
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, name ~= "" and 64 or 42),
+		BackgroundTransparency = 1,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	if name ~= "" then
+		local t = create("TextLabel", {
+			Size = UDim2.new(1, 0, 0, 16),
+			BackgroundTransparency = 1,
+			Text = name,
+			TextColor3 = th.Text,
+			TextSize = 13,
+			FontFace = FontRegular,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = c
+		})
+	end
+	local row = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 34),
+		Position = UDim2.fromOffset(0, name ~= "" and 22 or 0),
+		BackgroundColor3 = th.Surface2,
+		BackgroundTransparency = 0.15,
+		BorderSizePixel = 0,
+		Parent = c
+	})
+	corner(row, UDim.new(0, 10))
+	stroke(row, th.Stroke, 0.92)
+	pad(row, 3, 3, 3, 3)
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		Padding = UDim.new(0, 3),
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Parent = row
+	})
+	local cells = {}
+	local function refresh()
+		for opt, cell in pairs(cells) do
+			local on = opt == selected
+			local col = locked and accentCol or Theme.Accent
+			tween(cell.bg, {
+				BackgroundTransparency = on and 0.2 or 1,
+				BackgroundColor3 = on and col or th.Surface3
+			}, 0.15)
+			tween(cell.label, { TextColor3 = on and Color3.new(1, 1, 1) or th.Muted }, 0.15)
+		end
+	end
+	local n = #options
+	for i, opt in ipairs(options) do
+		local bg = create("TextButton", {
+			Size = UDim2.new(1 / n, -2, 1, 0),
+			BackgroundColor3 = th.Surface3,
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+			LayoutOrder = i,
+			Parent = row
+		})
+		corner(bg, UDim.new(0, 8))
+		local label = create("TextLabel", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = tostring(opt),
+			TextColor3 = th.Muted,
+			TextSize = 12,
+			FontFace = FontMedium,
+			Parent = bg
+		})
+		cells[opt] = { bg = bg, label = label }
+		bg.MouseButton1Click:Connect(function()
+			Ecstasy:PlayClick()
+			selected = opt
+			refresh()
+			safe(cb, selected)
+		end)
+	end
+	refresh()
+	if not locked then
+		Ecstasy:OnAccentChange(function() refresh() end)
+	end
+	return { Set = function(_, v) selected = v refresh() end, Get = function() return selected end }
+end
+
+function Section:CreateCountdown(opts)
+	opts = opts or {}
+	local name = opts.Name or "Timer"
+	local seconds = opts.Seconds or opts.Default or 60
+	local cb = opts.Callback
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = el(self, 56, opts.Order or opts.LayoutOrder)
+	create("TextLabel", {
+		Size = UDim2.new(0.5, 0, 0, 16), Position = UDim2.fromOffset(14, 8),
+		BackgroundTransparency = 1, Text = name, TextColor3 = th.Text,
+		TextSize = 13, FontFace = FontRegular, TextXAlignment = Enum.TextXAlignment.Left, Parent = c
+	})
+	local display = create("TextLabel", {
+		Size = UDim2.new(0.5, -14, 0, 16), Position = UDim2.new(0.5, 0, 0, 8),
+		BackgroundTransparency = 1, Text = "", TextColor3 = accentCol,
+		TextSize = 13, FontFace = FontSemi, TextXAlignment = Enum.TextXAlignment.Right, Parent = c
+	})
+	if not locked then Ecstasy:RegisterAccent(display, "TextColor3") end
+	local bar = create("Frame", {
+		Size = UDim2.new(1, -28, 0, 5), Position = UDim2.fromOffset(14, 38),
+		BackgroundColor3 = th.Surface3, BorderSizePixel = 0, Parent = c
+	})
+	corner(bar, UDim.new(1, 0))
+	local fill = create("Frame", {
+		Size = UDim2.fromScale(1, 1), BackgroundColor3 = accentCol, BorderSizePixel = 0, Parent = bar
+	})
+	corner(fill, UDim.new(1, 0))
+	if not locked then Ecstasy:RegisterAccent(fill) end
+
+	local total = seconds
+	local left = seconds
+	local running = false
+	local function fmt(s)
+		s = math.max(0, math.floor(s))
+		return string.format("%02d:%02d", math.floor(s / 60), s % 60)
+	end
+	local function tick()
+		display.Text = fmt(left)
+		fill.Size = UDim2.fromScale(total > 0 and (left / total) or 0, 1)
+	end
+	tick()
+
+	local api = {}
+	function api:Start(sec)
+		if sec then total = sec left = sec end
+		if running then return end
+		running = true
+		task.spawn(function()
+			while running and left > 0 do
+				task.wait(1)
+				if not running then break end
+				left = left - 1
+				tick()
+			end
+			running = false
+			if left <= 0 then safe(cb) end
+		end)
+	end
+	function api:Stop() running = false end
+	function api:Reset(sec)
+		running = false
+		total = sec or total
+		left = total
+		tick()
+	end
+	function api:Get() return left end
+	return api
+end
+
+function Section:CreateParagraphBox(opts)
+	opts = opts or {}
+	local text = opts.Text or opts.Content or ""
+	local th = self.Theme
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundColor3 = th.Surface2,
+		BackgroundTransparency = 0.25,
+		BorderSizePixel = 0,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	corner(c, UDim.new(0, 10))
+	stroke(c, th.Stroke, 0.94)
+	pad(c, 12, 12, 10, 12)
+	create("TextLabel", {
+		Size = UDim2.new(1, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Text = text,
+		TextColor3 = th.Muted,
+		TextSize = 12,
+		FontFace = FontRegular,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = c
+	})
+	return {
+		Set = function(_, t)
+			local lab = c:FindFirstChildWhichIsA("TextLabel")
+			if lab then lab.Text = tostring(t) end
+		end
+	}
+end
+
+function Section:CreateHotkeyBar(opts)
+	opts = opts or {}
+	local keys = opts.Keys or { "W", "A", "S", "D" }
+	local th = self.Theme
+	local accentCol, locked = Ecstasy:ResolveColor(opts, th.Accent)
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 50),
+		BackgroundTransparency = 1,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	create("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		Padding = UDim.new(0, 8),
+		Parent = c
+	})
+	for _, k in ipairs(keys) do
+		local key = create("Frame", {
+			Size = UDim2.fromOffset(36, 36),
+			BackgroundColor3 = th.Surface2,
+			BackgroundTransparency = 0.15,
+			BorderSizePixel = 0,
+			Parent = c
+		})
+		corner(key, UDim.new(0, 8))
+		stroke(key, th.Stroke, 0.9)
+		local lab = create("TextLabel", {
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = tostring(k),
+			TextColor3 = accentCol,
+			TextSize = 13,
+			FontFace = FontSemi,
+			Parent = key
+		})
+		if not locked then Ecstasy:RegisterAccent(lab, "TextColor3") end
 	end
 	return {}
 end
