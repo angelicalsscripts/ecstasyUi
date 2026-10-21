@@ -1413,76 +1413,6 @@ function Window:CreateSubWindow(opts)
 	return sub
 end
 
-function Section:CreateWindowButton(opts)
-	opts = opts or {}
-	local name = opts.Name or "Open Window"
-	local sub = opts.Window
-	if not sub then
-		sub = self.Window:CreateSubWindow({
-			Name = opts.WindowName or opts.Title or name,
-			Size = opts.Size or UDim2.fromOffset(420, 360),
-			Position = opts.Position,
-		})
-		if opts.Build and type(opts.Build) == "function" then
-			safe(opts.Build, sub)
-		end
-	end
-	local th = self.Theme
-	local c = el(self, 46, opts.Order or opts.LayoutOrder)
-	local btn = create("TextButton", {
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		Text = name,
-		TextColor3 = th.Text,
-		TextSize = 13,
-		FontFace = FontMedium,
-		AutoButtonColor = false,
-		Parent = c
-	})
-	local indicator = create("Frame", {
-		Size = UDim2.fromOffset(8, 8),
-		Position = UDim2.new(1, -18, 0.5, 0),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		BackgroundColor3 = th.Muted,
-		BorderSizePixel = 0,
-		Parent = c
-	})
-	corner(indicator, UDim.new(1, 0))
-	btn.MouseEnter:Connect(function() tween(btn, { TextColor3 = Theme.Accent }, 0.15) end)
-	btn.MouseLeave:Connect(function() tween(btn, { TextColor3 = th.Text }, 0.2) end)
-	local function sync()
-		local on = sub.Visible
-		indicator.BackgroundColor3 = on and Theme.Accent or th.Muted
-	end
-	Ecstasy:OnAccentChange(function()
-		if sub.Visible then indicator.BackgroundColor3 = Theme.Accent end
-	end)
-	local _show, _hide = sub.Show, sub.Hide
-	function sub:Show(silent)
-		_show(self, silent)
-		sync()
-	end
-	function sub:Hide(silent)
-		_hide(self, silent)
-		sync()
-	end
-	btn.MouseButton1Click:Connect(function()
-		Ecstasy:PlayClick()
-		sub:Toggle()
-		sync()
-		safe(opts.Callback, sub.Visible, sub)
-	end)
-	sync()
-	return {
-		Window = sub,
-		Toggle = function() sub:Toggle() sync() end,
-		Show = function() sub:Show() sync() end,
-		Hide = function() sub:Hide() sync() end,
-		Get = function() return sub.Visible end,
-		GetWindow = function() return sub end,
-	}
-end
-
 local Tab = {}
 Tab.__index = Tab
 
@@ -1709,6 +1639,77 @@ local function el(sec, h, order)
 	end)
 	return c
 end
+
+function Section:CreateWindowButton(opts)
+	opts = opts or {}
+	local name = opts.Name or "Open Window"
+	local sub = opts.Window
+	if not sub then
+		sub = self.Window:CreateSubWindow({
+			Name = opts.WindowName or opts.Title or name,
+			Size = opts.Size or UDim2.fromOffset(420, 360),
+			Position = opts.Position,
+		})
+		if opts.Build and type(opts.Build) == "function" then
+			safe(opts.Build, sub)
+		end
+	end
+	local th = self.Theme
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
+	local btn = create("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = th.Text,
+		TextSize = 13,
+		FontFace = FontMedium,
+		AutoButtonColor = false,
+		Parent = c
+	})
+	local indicator = create("Frame", {
+		Size = UDim2.fromOffset(8, 8),
+		Position = UDim2.new(1, -18, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = th.Muted,
+		BorderSizePixel = 0,
+		Parent = c
+	})
+	corner(indicator, UDim.new(1, 0))
+	btn.MouseEnter:Connect(function() tween(btn, { TextColor3 = Theme.Accent }, 0.15) end)
+	btn.MouseLeave:Connect(function() tween(btn, { TextColor3 = th.Text }, 0.2) end)
+	local function sync()
+		local on = sub.Visible
+		indicator.BackgroundColor3 = on and Theme.Accent or th.Muted
+	end
+	Ecstasy:OnAccentChange(function()
+		if sub.Visible then indicator.BackgroundColor3 = Theme.Accent end
+	end)
+	local _show, _hide = sub.Show, sub.Hide
+	function sub:Show(silent)
+		_show(self, silent)
+		sync()
+	end
+	function sub:Hide(silent)
+		_hide(self, silent)
+		sync()
+	end
+	btn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		sub:Toggle()
+		sync()
+		safe(opts.Callback, sub.Visible, sub)
+	end)
+	sync()
+	return {
+		Window = sub,
+		Toggle = function() sub:Toggle() sync() end,
+		Show = function() sub:Show() sync() end,
+		Hide = function() sub:Hide() sync() end,
+		Get = function() return sub.Visible end,
+		GetWindow = function() return sub end,
+	}
+end
+
 
 function Section:CreateToggle(opts)
 	opts = opts or {}
