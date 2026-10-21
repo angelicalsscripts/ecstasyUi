@@ -955,25 +955,26 @@ function Ecstasy:CreateWindow(opts)
 	end)
 
 	local side = create("Frame", {
-		Size = UDim2.new(0, 200, 1, -58),
-		Position = UDim2.fromOffset(0, 58),
+		Size = UDim2.new(0, 188, 1, -58),
+		Position = UDim2.fromOffset(10, 58),
 		BackgroundColor3 = theme.Surface,
 		BackgroundTransparency = 0.18 + Ecstasy.GlassTransparency * 0.35,
 		BorderSizePixel = 0,
 		Parent = main
 	})
 	win.Sidebar = side
+	corner(side, UDim.new(0, 12))
 	create("UIListLayout", {
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 5),
 		Parent = side
 	})
-	pad(side, 12, 12, 14, 14)
+	pad(side, 10, 10, 12, 12)
 	Ecstasy:RegisterGlass(side, 0.18)
 
 	local content = create("Frame", {
-		Size = UDim2.new(1, -200, 1, -58),
-		Position = UDim2.fromOffset(200, 58),
+		Size = UDim2.new(1, -220, 1, -74),
+		Position = UDim2.fromOffset(208, 64),
 		BackgroundTransparency = 1,
 		ClipsDescendants = true,
 		Parent = main
@@ -1041,6 +1042,7 @@ function Ecstasy:CreateWindow(opts)
 		if win._blur then tween(win._blur, { Size = 12 }, 0.4) end
 	end)
 
+	win.SubWindows = {}
 	table.insert(Ecstasy.Windows, win)
 	if opts.Settings ~= false then
 		task.defer(function()
@@ -1078,6 +1080,11 @@ function Window:Toggle()
 		if shell then tween(shell, { Position = target }, 0.18, Enum.EasingStyle.Quint) end
 		if g then tween(g, { Position = target }, 0.18, Enum.EasingStyle.Quint) end
 		if self._blur and self.Blur then tween(self._blur, { Size = 12 }, 0.18) end
+		for _, sw in ipairs(self.SubWindows or {}) do
+			if sw._wantVisible then
+				sw:Show(true)
+			end
+		end
 		task.delay(0.2, function() self._toggling = false end)
 	else
 		Ecstasy:PlayClose()
@@ -1087,6 +1094,14 @@ function Window:Toggle()
 		if shell then tween(shell, { Position = hidePos }, 0.16, Enum.EasingStyle.Quint) end
 		if g then tween(g, { Position = hidePos }, 0.16, Enum.EasingStyle.Quint) end
 		if self._blur then tween(self._blur, { Size = 0 }, 0.14) end
+		for _, sw in ipairs(self.SubWindows or {}) do
+			if sw.Visible then
+				sw._wantVisible = true
+				sw:Hide(true)
+			else
+				sw._wantVisible = false
+			end
+		end
 		task.delay(0.17, function()
 			if not self.Visible then
 				if shell then
@@ -1107,10 +1122,365 @@ end
 function Window:Destroy()
 	if self._dead then return end
 	self._dead = true
+	for _, sw in ipairs(self.SubWindows or {}) do
+		pcall(function() sw:Destroy() end)
+	end
+	table.clear(self.SubWindows or {})
 	self.Maid:Clean()
 	for i, w in ipairs(Ecstasy.Windows) do
 		if w == self then table.remove(Ecstasy.Windows, i) break end
 	end
+end
+
+function Window:CreateSubWindow(opts)
+	opts = opts or {}
+	local parentWin = self
+	local theme = self.Theme
+	local size = opts.Size or UDim2.fromOffset(420, 360)
+	local name = opts.Name or "Window"
+	local pos = opts.Position or UDim2.fromScale(0.62, 0.28)
+
+	local shell = create("Frame", {
+		Name = "Sub_" .. name,
+		Size = size,
+		Position = pos,
+		AnchorPoint = Vector2.new(0, 0),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 20,
+		Parent = self.Gui
+	})
+	local scale = create("UIScale", { Scale = 1, Parent = shell })
+
+	local glowHost = create("Frame", {
+		Size = UDim2.new(1, 40, 1, 40),
+		Position = UDim2.fromScale(0.5, 0.5),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundTransparency = 1,
+		Visible = false,
+		ZIndex = 19,
+		Parent = self.Gui
+	})
+	local glowLayers = {}
+	for _, L in ipairs({ {80, 0.78}, {140, 0.88} }) do
+		local gl = create("ImageLabel", {
+			Size = UDim2.new(1, L[1], 1, L[1]),
+			Position = UDim2.fromScale(0.5, 0.5),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			BackgroundTransparency = 1,
+			Image = GLOW,
+			ImageColor3 = theme.Accent,
+			ImageTransparency = L[2],
+			ZIndex = 0,
+			Parent = glowHost
+		})
+		table.insert(glowLayers, gl)
+	end
+
+	local main = create("CanvasGroup", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundColor3 = theme.Background,
+		BackgroundTransparency = 0.04 + Ecstasy.GlassTransparency,
+		BorderSizePixel = 0,
+		Parent = shell
+	})
+	corner(main, UDim.new(0, 14))
+	stroke(main, theme.Stroke, 0.82)
+	Ecstasy:RegisterGlass(main, 0.04)
+
+	local top = create("Frame", {
+		Size = UDim2.new(1, 0, 0, 44),
+		BackgroundColor3 = theme.Surface,
+		BackgroundTransparency = 0.15 + Ecstasy.GlassTransparency * 0.3,
+		BorderSizePixel = 0,
+		Parent = main
+	})
+	Ecstasy:RegisterGlass(top, 0.15)
+
+	create("TextLabel", {
+		Size = UDim2.new(1, -50, 1, 0),
+		Position = UDim2.fromOffset(16, 0),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = theme.Text,
+		TextSize = 15,
+		FontFace = FontSemi,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Parent = top
+	})
+	local titleLine = create("Frame", {
+		Size = UDim2.fromOffset(20, 2),
+		Position = UDim2.fromOffset(16, 34),
+		BackgroundColor3 = theme.Accent,
+		BorderSizePixel = 0,
+		Parent = top
+	})
+	Ecstasy:RegisterAccent(titleLine)
+
+	local close = create("TextButton", {
+		Size = UDim2.fromOffset(28, 28),
+		Position = UDim2.new(1, -36, 0.5, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		BackgroundColor3 = theme.Surface2,
+		BackgroundTransparency = 0.3,
+		Text = "×",
+		TextColor3 = theme.Muted,
+		TextSize = 18,
+		FontFace = FontSemi,
+		AutoButtonColor = false,
+		Parent = top
+	})
+	corner(close, UDim.new(1, 0))
+
+	local body = create("ScrollingFrame", {
+		Size = UDim2.new(1, 0, 1, -44),
+		Position = UDim2.fromOffset(0, 44),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 3,
+		ScrollBarImageColor3 = theme.Accent,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		Parent = main
+	})
+	Ecstasy:RegisterAccent(body, "ScrollBarImageColor3")
+	pad(body, 14, 16, 12, 16)
+
+	local colL = create("Frame", {
+		Size = UDim2.new(0.5, -8, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = body
+	})
+	create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12), Parent = colL })
+	local colR = create("Frame", {
+		Size = UDim2.new(0.5, -8, 0, 0),
+		Position = UDim2.new(0.5, 8, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		BackgroundTransparency = 1,
+		Parent = body
+	})
+	create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 12), Parent = colR })
+
+	local sub = {
+		Name = name,
+		Parent = parentWin,
+		Theme = theme,
+		Gui = self.Gui,
+		Shell = shell,
+		Main = main,
+		GlowHost = glowHost,
+		Body = body,
+		Left = colL,
+		Right = colR,
+		Visible = false,
+		_wantVisible = false,
+		_toggling = false,
+		Maid = Maid.new(),
+		Sections = {},
+	}
+	sub.Maid:Inst(shell)
+	sub.Maid:Inst(glowHost)
+
+	local dragging, dragStart, startPos, targetPos, currentPos =
+		false, Vector2.zero, shell.Position, shell.Position, shell.Position
+
+	sub.Maid:Conn(top.InputBegan:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = Vector2.new(inp.Position.X, inp.Position.Y)
+			startPos = shell.Position
+			currentPos = shell.Position
+			targetPos = shell.Position
+		end
+	end))
+	sub.Maid:Conn(UserInputService.InputChanged:Connect(function(inp)
+		if not dragging then return end
+		if inp.UserInputType ~= Enum.UserInputType.MouseMovement and inp.UserInputType ~= Enum.UserInputType.Touch then return end
+		local d = Vector2.new(inp.Position.X, inp.Position.Y) - dragStart
+		targetPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+	end))
+	sub.Maid:Conn(UserInputService.InputEnded:Connect(function(inp)
+		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end))
+	sub.Maid:Conn(RunService.RenderStepped:Connect(function(dt)
+		if not shell.Parent then return end
+		local a = math.clamp(dt * 18, 0, 1)
+		local x = currentPos.X.Offset + (targetPos.X.Offset - currentPos.X.Offset) * a
+		local y = currentPos.Y.Offset + (targetPos.Y.Offset - currentPos.Y.Offset) * a
+		currentPos = UDim2.new(targetPos.X.Scale, x, targetPos.Y.Scale, y)
+		shell.Position = currentPos
+		glowHost.Position = UDim2.new(0, currentPos.X.Offset - 20, 0, currentPos.Y.Offset - 20)
+		glowHost.Size = UDim2.new(0, shell.AbsoluteSize.X + 40, 0, shell.AbsoluteSize.Y + 40)
+	end))
+
+	function sub:Show(silent)
+		if self.Visible then return end
+		self.Visible = true
+		self._wantVisible = true
+		if not silent then Ecstasy:PlayOpen() end
+		shell.Visible = true
+		glowHost.Visible = true
+		scale.Scale = 0.94
+		main.BackgroundTransparency = 1
+		tween(scale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
+		tween(main, { BackgroundTransparency = math.clamp(0.04 + Ecstasy.GlassTransparency, 0, 0.85) }, 0.18)
+	end
+
+	function sub:Hide(silent)
+		if not self.Visible then return end
+		self.Visible = false
+		if not silent then Ecstasy:PlayClose() end
+		tween(scale, { Scale = 0.94 }, 0.14, Enum.EasingStyle.Quint)
+		tween(main, { BackgroundTransparency = 1 }, 0.14)
+		task.delay(0.15, function()
+			if not self.Visible then
+				shell.Visible = false
+				glowHost.Visible = false
+				scale.Scale = 1
+			end
+		end)
+	end
+
+	function sub:Toggle()
+		if self.Visible then self:Hide() else self:Show() end
+	end
+
+	function sub:Destroy()
+		self.Maid:Clean()
+		for i, s in ipairs(parentWin.SubWindows or {}) do
+			if s == self then table.remove(parentWin.SubWindows, i) break end
+		end
+	end
+
+	function sub:CreateSection(opts)
+		opts = opts or {}
+		local side = string.lower(opts.Side or "Left")
+		local parent = side == "right" and self.Right or self.Left
+		local sec = setmetatable({
+			Name = opts.Name or "Section",
+			Tab = nil,
+			Window = parentWin,
+			Theme = theme,
+			Maid = Maid.new(),
+		}, Section)
+		local frame = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 0),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundColor3 = theme.Surface,
+			BackgroundTransparency = 0.12 + Ecstasy.GlassTransparency * 0.4,
+			BorderSizePixel = 0,
+			Parent = parent
+		})
+		corner(frame, UDim.new(0, 12))
+		stroke(frame, theme.Stroke, 0.9)
+		pad(frame, 16, 16, 14, 16)
+		sec.Frame = frame
+		Ecstasy:RegisterGlass(frame, 0.12)
+		local secTitle = create("TextLabel", {
+			Size = UDim2.new(1, 0, 0, 16),
+			BackgroundTransparency = 1,
+			Text = opts.Name or "Section",
+			TextColor3 = Theme.Accent,
+			TextSize = 12,
+			FontFace = FontSemi,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Parent = frame
+		})
+		Ecstasy:RegisterAccent(secTitle, "TextColor3")
+		sec.Title = secTitle
+		local list = create("Frame", {
+			Size = UDim2.new(1, 0, 0, 0),
+			Position = UDim2.fromOffset(0, 22),
+			AutomaticSize = Enum.AutomaticSize.Y,
+			BackgroundTransparency = 1,
+			Parent = frame
+		})
+		create("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 8), Parent = list })
+		sec.List = list
+		table.insert(self.Sections, sec)
+		return sec
+	end
+
+	close.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		sub:Hide()
+	end)
+
+	table.insert(parentWin.SubWindows, sub)
+	return sub
+end
+
+function Section:CreateWindowButton(opts)
+	opts = opts or {}
+	local name = opts.Name or "Open Window"
+	local sub = opts.Window
+	if not sub then
+		sub = self.Window:CreateSubWindow({
+			Name = opts.WindowName or opts.Title or name,
+			Size = opts.Size or UDim2.fromOffset(420, 360),
+			Position = opts.Position,
+		})
+		if opts.Build and type(opts.Build) == "function" then
+			safe(opts.Build, sub)
+		end
+	end
+	local th = self.Theme
+	local c = el(self, 46, opts.Order or opts.LayoutOrder)
+	local btn = create("TextButton", {
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Text = name,
+		TextColor3 = th.Text,
+		TextSize = 13,
+		FontFace = FontMedium,
+		AutoButtonColor = false,
+		Parent = c
+	})
+	local indicator = create("Frame", {
+		Size = UDim2.fromOffset(8, 8),
+		Position = UDim2.new(1, -18, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = th.Muted,
+		BorderSizePixel = 0,
+		Parent = c
+	})
+	corner(indicator, UDim.new(1, 0))
+	btn.MouseEnter:Connect(function() tween(btn, { TextColor3 = Theme.Accent }, 0.15) end)
+	btn.MouseLeave:Connect(function() tween(btn, { TextColor3 = th.Text }, 0.2) end)
+	local function sync()
+		local on = sub.Visible
+		indicator.BackgroundColor3 = on and Theme.Accent or th.Muted
+	end
+	Ecstasy:OnAccentChange(function()
+		if sub.Visible then indicator.BackgroundColor3 = Theme.Accent end
+	end)
+	local _show, _hide = sub.Show, sub.Hide
+	function sub:Show(silent)
+		_show(self, silent)
+		sync()
+	end
+	function sub:Hide(silent)
+		_hide(self, silent)
+		sync()
+	end
+	btn.MouseButton1Click:Connect(function()
+		Ecstasy:PlayClick()
+		sub:Toggle()
+		sync()
+		safe(opts.Callback, sub.Visible, sub)
+	end)
+	sync()
+	return {
+		Window = sub,
+		Toggle = function() sub:Toggle() sync() end,
+		Show = function() sub:Show() sync() end,
+		Hide = function() sub:Hide() sync() end,
+		Get = function() return sub.Visible end,
+		GetWindow = function() return sub end,
+	}
 end
 
 local Tab = {}
@@ -1189,10 +1559,10 @@ function Window:CreateTab(opts)
 		Parent = self.Content
 	})
 	tab.Page = page
-	pad(page, 18, 18, 16, 18)
+	pad(page, 8, 16, 8, 16)
 
 	local left = create("Frame", {
-		Size = UDim2.new(0.5, -9, 0, 0),
+		Size = UDim2.new(0.5, -10, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Parent = page
@@ -1201,8 +1571,8 @@ function Window:CreateTab(opts)
 	tab.Left = left
 
 	local right = create("Frame", {
-		Size = UDim2.new(0.5, -9, 0, 0),
-		Position = UDim2.new(0.5, 9, 0, 0),
+		Size = UDim2.new(0.5, -10, 0, 0),
+		Position = UDim2.new(0.5, 10, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Parent = page
@@ -1283,7 +1653,7 @@ function Tab:CreateSection(opts)
 	})
 	corner(frame, UDim.new(0, 12))
 	stroke(frame, self.Window.Theme.Stroke, 0.9)
-	pad(frame, 14, 14, 12, 14)
+	pad(frame, 16, 16, 14, 16)
 	sec.Frame = frame
 	Ecstasy:RegisterGlass(frame, 0.12)
 
