@@ -104,6 +104,53 @@ local function colorClose(a, b)
 	return math.abs(a.R - b.R) < 0.04 and math.abs(a.G - b.G) < 0.04 and math.abs(a.B - b.B) < 0.04
 end
 
+local AvatarCache = {}
+
+local function resolveUserId(user)
+	if typeof(user) == "number" then return user end
+	if typeof(user) == "Instance" and user:IsA("Player") then return user.UserId end
+	if typeof(user) == "string" then
+		local n = tonumber(user)
+		if n then return n end
+		local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(user) end)
+		if ok and id then return id end
+	end
+	return nil
+end
+
+local function fetchAvatar(user, size)
+	size = size or Enum.ThumbnailSize.Size100x100
+	local uid = resolveUserId(user)
+	if not uid then return "" end
+	local key = tostring(uid) .. "_" .. tostring(size)
+	if AvatarCache[key] then return AvatarCache[key] end
+	local ok, content = pcall(function()
+		local url, ready = Players:GetUserThumbnailAsync(uid, Enum.ThumbnailType.HeadShot, size)
+		return ready and url or ""
+	end)
+	if ok and content and content ~= "" then
+		AvatarCache[key] = content
+		return content
+	end
+	return ""
+end
+
+function Ecstasy:GetAvatar(user, size)
+	return fetchAvatar(user, size)
+end
+
+function Ecstasy:ApplyAvatar(imageLabel, user, size)
+	if not imageLabel then return end
+	task.spawn(function()
+		local url = fetchAvatar(user, size)
+		if imageLabel.Parent then
+			imageLabel.Image = url
+		end
+	end)
+end
+
+
+
 local GLOW = "rbxassetid://8992230677"
 local SHADOW = "rbxassetid://6014261993"
 local CONFIG_PATH = "ecstasy_config.json"
@@ -377,43 +424,53 @@ local function addHover(frame, scaleTarget)
 	local grad = create("UIGradient", {
 		Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-			ColorSequenceKeypoint.new(0.5, Theme.Accent),
+			ColorSequenceKeypoint.new(0.45, Theme.Accent),
+			ColorSequenceKeypoint.new(0.55, Theme.Accent),
 			ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
 		}),
 		Transparency = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, 1),
-			NumberSequenceKeypoint.new(0.3, 0.85),
-			NumberSequenceKeypoint.new(0.5, 0.55),
-			NumberSequenceKeypoint.new(0.7, 0.85),
+			NumberSequenceKeypoint.new(0.25, 0.78),
+			NumberSequenceKeypoint.new(0.5, 0.35),
+			NumberSequenceKeypoint.new(0.75, 0.78),
 			NumberSequenceKeypoint.new(1, 1),
 		}),
 		Parent = shine
 	})
 	local scale = create("UIScale", { Scale = 1, Parent = scaleTarget or frame })
 	local hovering = false
+	local pressed = false
 	frame.MouseEnter:Connect(function()
 		hovering = true
 		grad.Color = ColorSequence.new({
 			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-			ColorSequenceKeypoint.new(0.5, Theme.Accent),
+			ColorSequenceKeypoint.new(0.45, Theme.Accent),
+			ColorSequenceKeypoint.new(0.55, Theme.Accent),
 			ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
 		})
-		tween(shine, { BackgroundTransparency = 0.62 }, 0.16)
-		tween(scale, { Scale = 1.045 }, 0.18, Enum.EasingStyle.Quint)
+		tween(shine, { BackgroundTransparency = 0.42 }, 0.14, Enum.EasingStyle.Quint)
+		if not pressed then
+			tween(scale, { Scale = 1.055 }, 0.22, Enum.EasingStyle.Back)
+		end
 	end)
 	frame.MouseLeave:Connect(function()
 		hovering = false
-		tween(shine, { BackgroundTransparency = 1 }, 0.2)
-		tween(scale, { Scale = 1 }, 0.2, Enum.EasingStyle.Quint)
+		pressed = false
+		tween(shine, { BackgroundTransparency = 1 }, 0.22, Enum.EasingStyle.Quint)
+		tween(scale, { Scale = 1 }, 0.24, Enum.EasingStyle.Quint)
 	end)
 	frame.InputBegan:Connect(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-			tween(scale, { Scale = 0.94 }, 0.06, Enum.EasingStyle.Quad)
+			pressed = true
+			tween(scale, { Scale = 0.955 }, 0.08, Enum.EasingStyle.Quad)
+			tween(shine, { BackgroundTransparency = 0.55 }, 0.08)
 		end
 	end)
 	frame.InputEnded:Connect(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1 or inp.UserInputType == Enum.UserInputType.Touch then
-			tween(scale, { Scale = hovering and 1.045 or 1 }, 0.16, Enum.EasingStyle.Back)
+			pressed = false
+			tween(scale, { Scale = hovering and 1.055 or 1 }, 0.2, Enum.EasingStyle.Back)
+			tween(shine, { BackgroundTransparency = hovering and 0.42 or 1 }, 0.16)
 		end
 	end)
 	local conn = RunService.RenderStepped:Connect(function()
@@ -424,8 +481,8 @@ local function addHover(frame, scaleTarget)
 		if size.X <= 0 or size.Y <= 0 then return end
 		local rx = math.clamp((mouse.X - pos.X) / size.X, 0, 1)
 		local ry = math.clamp((mouse.Y - pos.Y) / size.Y, 0, 1)
-		grad.Offset = Vector2.new((rx - 0.5) * 1.7, (ry - 0.5) * 1.7)
-		grad.Rotation = (rx - 0.5) * 55
+		grad.Offset = Vector2.new((rx - 0.5) * 1.85, (ry - 0.5) * 1.85)
+		grad.Rotation = (rx - 0.5) * 70 + (ry - 0.5) * 20
 	end)
 	frame.Destroying:Connect(function() conn:Disconnect() end)
 end
@@ -463,7 +520,11 @@ function Ecstasy:Notify(o)
 	local title = o.Title or "Notification"
 	local content = o.Content or ""
 	local duration = o.Duration or 4
+	local avatarUser = o.Avatar or o.Username or o.User or o.Player
+	local avatarImage = o.Image
 	local closed = false
+
+	local hasAvatar = avatarUser ~= nil or (avatarImage and avatarImage ~= "")
 
 	local wrapper = create("Frame", {
 		Size = UDim2.new(1, 0, 0, 0),
@@ -476,21 +537,21 @@ function Ecstasy:Notify(o)
 		Size = UDim2.new(1, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundColor3 = Theme.Surface,
-		BackgroundTransparency = 0.06 + Ecstasy.GlassTransparency * 0.25,
+		BackgroundTransparency = 0.05 + Ecstasy.GlassTransparency * 0.25,
 		BorderSizePixel = 0,
 		Parent = wrapper
 	})
 	corner(card, UDim.new(0, 14))
-	stroke(card, Theme.Stroke, 0.92, 1)
+	stroke(card, Theme.Stroke, 0.9, 1)
 
 	local glow = create("ImageLabel", {
-		Size = UDim2.new(1, 50, 1, 50),
+		Size = UDim2.new(1, 56, 1, 56),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Image = GLOW,
 		ImageColor3 = Theme.Accent,
-		ImageTransparency = 0.86,
+		ImageTransparency = 0.84,
 		ZIndex = 0,
 		Parent = card
 	})
@@ -502,10 +563,48 @@ function Ecstasy:Notify(o)
 		BackgroundTransparency = 1,
 		Parent = card
 	})
-	pad(inner, 16, 16, 14, 16)
+	pad(inner, 14, 14, 12, 14)
+
+	local leftPad = 0
+	if hasAvatar then
+		local avWrap = create("Frame", {
+			Size = UDim2.fromOffset(42, 42),
+			BackgroundColor3 = Theme.Surface3,
+			BackgroundTransparency = 0.2,
+			BorderSizePixel = 0,
+			Parent = inner
+		})
+		corner(avWrap, UDim.new(1, 0))
+		local avStroke = stroke(avWrap, Theme.Accent, 0.35, 1.5)
+		Ecstasy:RegisterAccent(avStroke, "Color")
+
+		local av = create("ImageLabel", {
+			Size = UDim2.new(1, -2, 1, -2),
+			Position = UDim2.fromOffset(1, 1),
+			BackgroundTransparency = 1,
+			Image = typeof(avatarImage) == "string" and avatarImage or "",
+			ScaleType = Enum.ScaleType.Crop,
+			Parent = avWrap
+		})
+		corner(av, UDim.new(1, 0))
+
+		if avatarUser then
+			task.spawn(function()
+				local url = fetchAvatar(avatarUser, Enum.ThumbnailSize.Size100x100)
+				if av.Parent and url ~= "" then
+					av.Image = url
+					local s = create("UIScale", { Scale = 0.6, Parent = avWrap })
+					tween(s, { Scale = 1 }, 0.35, Enum.EasingStyle.Back)
+				end
+			end)
+		end
+
+		leftPad = 52
+	end
 
 	local accent = create("Frame", {
 		Size = UDim2.new(0, 3, 1, 0),
+		Position = UDim2.fromOffset(leftPad, 0),
 		BackgroundColor3 = Theme.Accent,
 		BorderSizePixel = 0,
 		Parent = inner
@@ -514,8 +613,8 @@ function Ecstasy:Notify(o)
 	Ecstasy:RegisterAccent(accent)
 
 	local textCol = create("Frame", {
-		Size = UDim2.new(1, -14, 0, 0),
-		Position = UDim2.fromOffset(14, 0),
+		Size = UDim2.new(1, -(leftPad + 10), 0, 0),
+		Position = UDim2.fromOffset(leftPad + 10, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		BackgroundTransparency = 1,
 		Parent = inner
@@ -568,17 +667,17 @@ function Ecstasy:Notify(o)
 	})
 	Ecstasy:RegisterAccent(prog)
 
-	local scale = create("UIScale", { Scale = 0.88, Parent = card })
-	wrapper.Position = UDim2.new(1, 40, 0, 0)
+	local scale = create("UIScale", { Scale = 0.82, Parent = card })
+	wrapper.Position = UDim2.new(1, 56, 0, 0)
 	card.GroupTransparency = 1
 
 	local function dismiss()
 		if closed or not wrapper.Parent then return end
 		closed = true
-		tween(wrapper, { Position = UDim2.new(1, 48, 0, 0) }, 0.22, Enum.EasingStyle.Quint)
-		tween(card, { GroupTransparency = 1 }, 0.2)
-		tween(scale, { Scale = 0.9 }, 0.2)
-		task.delay(0.24, function() if wrapper.Parent then wrapper:Destroy() end end)
+		tween(wrapper, { Position = UDim2.new(1, 60, 0, 0) }, 0.26, Enum.EasingStyle.Quint)
+		tween(card, { GroupTransparency = 1 }, 0.22, Enum.EasingStyle.Quint)
+		tween(scale, { Scale = 0.88 }, 0.22, Enum.EasingStyle.Quint)
+		task.delay(0.28, function() if wrapper.Parent then wrapper:Destroy() end end)
 	end
 
 	local hit = create("TextButton", {
@@ -590,24 +689,24 @@ function Ecstasy:Notify(o)
 	})
 	hit.MouseEnter:Connect(function()
 		if closed then return end
-		tween(scale, { Scale = 1.04 }, 0.16, Enum.EasingStyle.Quint)
+		tween(scale, { Scale = 1.05 }, 0.18, Enum.EasingStyle.Back)
 		tween(card, { BackgroundTransparency = 0.02 }, 0.16)
-		tween(glow, { ImageTransparency = 0.78 }, 0.16)
+		tween(glow, { ImageTransparency = 0.72 }, 0.16)
 	end)
 	hit.MouseLeave:Connect(function()
 		if closed then return end
-		tween(scale, { Scale = 1 }, 0.18, Enum.EasingStyle.Quint)
-		tween(card, { BackgroundTransparency = 0.06 + Ecstasy.GlassTransparency * 0.25 }, 0.18)
-		tween(glow, { ImageTransparency = 0.86 }, 0.18)
+		tween(scale, { Scale = 1 }, 0.2, Enum.EasingStyle.Quint)
+		tween(card, { BackgroundTransparency = 0.05 + Ecstasy.GlassTransparency * 0.25 }, 0.18)
+		tween(glow, { ImageTransparency = 0.84 }, 0.18)
 	end)
 	hit.MouseButton1Click:Connect(function()
 		Ecstasy:PlayClick()
 		dismiss()
 	end)
 
-	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.3, Enum.EasingStyle.Quint)
-	tween(card, { GroupTransparency = 0 }, 0.26, Enum.EasingStyle.Quint)
-	tween(scale, { Scale = 1 }, 0.32, Enum.EasingStyle.Back)
+	tween(wrapper, { Position = UDim2.new(0, 0, 0, 0) }, 0.38, Enum.EasingStyle.Back)
+	tween(card, { GroupTransparency = 0 }, 0.28, Enum.EasingStyle.Quint)
+	tween(scale, { Scale = 1 }, 0.4, Enum.EasingStyle.Back)
 	tween(prog, { Size = UDim2.fromScale(0, 1) }, duration, Enum.EasingStyle.Linear)
 
 	task.delay(duration, function()
@@ -618,13 +717,14 @@ end
 local function playLoading(parent, theme, done)
 	local ov = create("Frame", {
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = Color3.fromRGB(2, 2, 4),
+		BackgroundColor3 = Color3.fromRGB(2, 2, 5),
 		BackgroundTransparency = 0,
 		ZIndex = 600,
 		Parent = parent
 	})
 
-	for i, L in ipairs({ {280, 0.72}, {460, 0.84}, {680, 0.92} }) do
+	local pulseConns = {}
+	for i, L in ipairs({ {300, 0.7}, {480, 0.82}, {720, 0.91} }) do
 		local g = create("ImageLabel", {
 			Size = UDim2.fromOffset(L[1], L[1]),
 			Position = UDim2.fromScale(0.5, 0.5),
@@ -636,78 +736,77 @@ local function playLoading(parent, theme, done)
 			ZIndex = 601,
 			Parent = ov
 		})
-		task.spawn(function()
-			local t0 = os.clock()
-			while g.Parent do
-				local t = os.clock() - t0
-				g.ImageTransparency = L[2] + math.sin(t * 2 + i) * 0.04
-				task.wait()
-			end
-		end)
+		local s = create("UIScale", { Scale = 1, Parent = g })
+		table.insert(pulseConns, RunService.RenderStepped:Connect(function()
+			if not g.Parent then return end
+			local t = os.clock()
+			g.ImageTransparency = L[2] + math.sin(t * 2.2 + i) * 0.05
+			s.Scale = 1 + math.sin(t * 1.4 + i * 0.7) * 0.04
+		end))
 	end
 
 	local glass = create("CanvasGroup", {
-		Size = UDim2.fromOffset(320, 190),
+		Size = UDim2.fromOffset(340, 210),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = theme.Surface,
-		BackgroundTransparency = 0.15,
+		BackgroundTransparency = 0.12,
 		BorderSizePixel = 0,
 		GroupTransparency = 1,
 		ZIndex = 602,
 		Parent = ov
 	})
-	corner(glass, UDim.new(0, 20))
-	stroke(glass, theme.Stroke, 0.85)
-	local glassScale = create("UIScale", { Scale = 0.82, Parent = glass })
+	corner(glass, UDim.new(0, 22))
+	stroke(glass, theme.Stroke, 0.82, 1.2)
+	local glassScale = create("UIScale", { Scale = 0.78, Parent = glass })
 
 	local ringOuter = create("Frame", {
-		Size = UDim2.fromOffset(56, 56),
-		Position = UDim2.new(0.5, 0, 0, 28),
+		Size = UDim2.fromOffset(64, 64),
+		Position = UDim2.new(0.5, 0, 0, 30),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
 		Parent = glass
 	})
 	local ringStroke = create("UIStroke", {
 		Color = theme.Accent,
-		Thickness = 3,
-		Transparency = 0.15,
+		Thickness = 3.2,
+		Transparency = 0.1,
 		Parent = ringOuter
 	})
 	create("UICorner", { CornerRadius = UDim.new(1, 0), Parent = ringOuter })
 	create("UIGradient", {
 		Transparency = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, 0),
-			NumberSequenceKeypoint.new(0.55, 0.15),
+			NumberSequenceKeypoint.new(0.45, 0.1),
 			NumberSequenceKeypoint.new(1, 1),
 		}),
 		Parent = ringStroke
 	})
-	local ringInner = create("Frame", {
-		Size = UDim2.fromOffset(36, 36),
+	local ringCore = create("Frame", {
+		Size = UDim2.fromOffset(18, 18),
 		Position = UDim2.fromScale(0.5, 0.5),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = theme.Accent,
-		BackgroundTransparency = 0.85,
+		BackgroundTransparency = 0.25,
 		Parent = ringOuter
 	})
-	corner(ringInner, UDim.new(1, 0))
+	corner(ringCore, UDim.new(1, 0))
 
 	local brand = create("TextLabel", {
 		Size = UDim2.new(1, 0, 0, 18),
-		Position = UDim2.new(0.5, 0, 0, 98),
+		Position = UDim2.new(0.5, 0, 0, 108),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
 		Text = "ecstasy",
 		TextColor3 = theme.Accent,
-		TextSize = 13,
+		TextSize = 14,
 		FontFace = FontSemi,
 		TextTransparency = 1,
 		Parent = glass
 	})
 	local loadingLabel = create("TextLabel", {
 		Size = UDim2.new(1, 0, 0, 22),
-		Position = UDim2.new(0.5, 0, 0, 118),
+		Position = UDim2.new(0.5, 0, 0, 128),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundTransparency = 1,
 		Text = "Loading",
@@ -719,7 +818,7 @@ local function playLoading(parent, theme, done)
 	})
 	local dots = create("TextLabel", {
 		Size = UDim2.new(0, 36, 0, 22),
-		Position = UDim2.new(0.5, 40, 0, 118),
+		Position = UDim2.new(0.5, 42, 0, 128),
 		AnchorPoint = Vector2.new(0, 0),
 		BackgroundTransparency = 1,
 		Text = "",
@@ -731,11 +830,11 @@ local function playLoading(parent, theme, done)
 	})
 
 	local barBg = create("Frame", {
-		Size = UDim2.new(0.7, 0, 0, 3),
-		Position = UDim2.new(0.5, 0, 1, -22),
+		Size = UDim2.new(0.72, 0, 0, 4),
+		Position = UDim2.new(0.5, 0, 1, -26),
 		AnchorPoint = Vector2.new(0.5, 0),
 		BackgroundColor3 = theme.Surface3,
-		BackgroundTransparency = 0.3,
+		BackgroundTransparency = 0.25,
 		BorderSizePixel = 0,
 		Parent = glass
 	})
@@ -749,50 +848,51 @@ local function playLoading(parent, theme, done)
 	corner(barFill, UDim.new(1, 0))
 
 	local spinConn = RunService.RenderStepped:Connect(function(dt)
-		ringOuter.Rotation = (ringOuter.Rotation + dt * 320) % 360
+		ringOuter.Rotation = (ringOuter.Rotation + dt * 340) % 360
+		ringCore.BackgroundTransparency = 0.2 + math.sin(os.clock() * 4) * 0.15
 	end)
 
-	tween(glass, { GroupTransparency = 0 }, 0.3, Enum.EasingStyle.Quint)
-	tween(glassScale, { Scale = 1 }, 0.35, Enum.EasingStyle.Back)
-	tween(brand, { TextTransparency = 0 }, 0.25)
-	tween(loadingLabel, { TextTransparency = 0 }, 0.25)
-	tween(dots, { TextTransparency = 0 }, 0.25)
-	tween(barFill, { Size = UDim2.fromScale(1, 1) }, 0.7, Enum.EasingStyle.Quad)
+	tween(glass, { GroupTransparency = 0 }, 0.32, Enum.EasingStyle.Quint)
+	tween(glassScale, { Scale = 1 }, 0.42, Enum.EasingStyle.Back)
+	tween(brand, { TextTransparency = 0 }, 0.28)
+	tween(loadingLabel, { TextTransparency = 0 }, 0.28)
+	tween(dots, { TextTransparency = 0 }, 0.28)
+	tween(barFill, { Size = UDim2.fromScale(1, 1) }, 0.75, Enum.EasingStyle.Quad)
 
 	local running = true
-	local patterns = { ".", "..", "..." }
-	local di = 0
 	task.spawn(function()
+		local di = 0
+		local patterns = { ".", "..", "..." }
 		while running do
 			di = (di % 3) + 1
 			dots.Text = patterns[di]
-			task.wait(0.16)
+			task.wait(0.15)
 		end
 	end)
 
-	task.wait(0.55)
+	task.wait(0.65)
 	running = false
-	tween(loadingLabel, { TextTransparency = 1 }, 0.12)
-	tween(dots, { TextTransparency = 1 }, 0.12)
-	tween(brand, { TextTransparency = 1 }, 0.12)
-	tween(ringStroke, { Transparency = 1 }, 0.12)
-	tween(ringInner, { BackgroundTransparency = 1 }, 0.12)
-	tween(barBg, { BackgroundTransparency = 1 }, 0.12)
-	tween(barFill, { BackgroundTransparency = 1 }, 0.12)
-	task.wait(0.1)
+	tween(loadingLabel, { TextTransparency = 1 }, 0.14)
+	tween(dots, { TextTransparency = 1 }, 0.14)
+	tween(brand, { TextTransparency = 1 }, 0.14)
+	tween(ringStroke, { Transparency = 1 }, 0.14)
+	tween(ringCore, { BackgroundTransparency = 1 }, 0.14)
+	tween(barBg, { BackgroundTransparency = 1 }, 0.14)
+	tween(barFill, { BackgroundTransparency = 1 }, 0.14)
+	task.wait(0.12)
 
 	local avatar = create("ImageLabel", {
 		Size = UDim2.fromOffset(0, 0),
-		Position = UDim2.new(0.5, 0, 0.5, -18),
+		Position = UDim2.new(0.5, 0, 0.5, -20),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundColor3 = theme.Surface2,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.05,
 		Image = "",
 		ScaleType = Enum.ScaleType.Crop,
 		Parent = glass
 	})
 	corner(avatar, UDim.new(1, 0))
-	stroke(avatar, theme.Accent, 0.25, 2)
+	local avStroke = stroke(avatar, theme.Accent, 0.2, 2)
 
 	pcall(function()
 		local content, ready = Players:GetUserThumbnailAsync(
@@ -805,7 +905,7 @@ local function playLoading(parent, theme, done)
 
 	local welcome = create("TextLabel", {
 		Size = UDim2.new(1, -24, 0, 20),
-		Position = UDim2.new(0.5, 0, 0.5, 32),
+		Position = UDim2.new(0.5, 0, 0.5, 36),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		BackgroundTransparency = 1,
 		Text = "Welcome, " .. (LocalPlayer.DisplayName or LocalPlayer.Name),
@@ -816,18 +916,20 @@ local function playLoading(parent, theme, done)
 		Parent = glass
 	})
 
-	tween(avatar, { Size = UDim2.fromOffset(58, 58) }, 0.3, Enum.EasingStyle.Back)
-	tween(welcome, { TextTransparency = 0 }, 0.22)
-	task.wait(0.5)
+	tween(avatar, { Size = UDim2.fromOffset(64, 64) }, 0.38, Enum.EasingStyle.Back)
+	tween(welcome, { TextTransparency = 0 }, 0.28, Enum.EasingStyle.Quint)
+	task.wait(0.55)
 
 	spinConn:Disconnect()
-	tween(glassScale, { Scale = 1.1 }, 0.22, Enum.EasingStyle.Quint)
-	tween(glass, { GroupTransparency = 1 }, 0.22)
-	tween(ov, { BackgroundTransparency = 1 }, 0.28)
-	task.wait(0.28)
+	for _, c in ipairs(pulseConns) do pcall(function() c:Disconnect() end) end
+	tween(glassScale, { Scale = 1.12 }, 0.28, Enum.EasingStyle.Quint)
+	tween(glass, { GroupTransparency = 1 }, 0.28, Enum.EasingStyle.Quint)
+	tween(ov, { BackgroundTransparency = 1 }, 0.35, Enum.EasingStyle.Quint)
+	task.wait(0.32)
 	ov:Destroy()
 	if done then done() end
 end
+
 
 local Window = {}
 Window.__index = Window
@@ -2579,6 +2681,45 @@ end
 
 function Section:CreateParagraph(opts)
 	return self:CreateLabel(opts)
+end
+
+function Section:CreateAvatar(opts)
+	opts = opts or {}
+	local user = opts.User or opts.Username or opts.Player or LocalPlayer
+	local size = opts.Size or 48
+	local th = self.Theme
+	local c = create("Frame", {
+		Size = UDim2.new(1, 0, 0, size + 16),
+		BackgroundTransparency = 1,
+		LayoutOrder = opts.Order or opts.LayoutOrder or 0,
+		Parent = self.List
+	})
+	local av = create("ImageLabel", {
+		Size = UDim2.fromOffset(size, size),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		BackgroundColor3 = th.Surface3,
+		BackgroundTransparency = 0.15,
+		Image = "",
+		ScaleType = Enum.ScaleType.Crop,
+		Parent = c
+	})
+	corner(av, UDim.new(1, 0))
+	local st = stroke(av, Theme.Accent, 0.35, 1.5)
+	Ecstasy:RegisterAccent(st, "Color")
+	task.spawn(function()
+		local url = fetchAvatar(user, Enum.ThumbnailSize.Size150x150)
+		if av.Parent then av.Image = url end
+	end)
+	return {
+		SetUser = function(_, u)
+			task.spawn(function()
+				local url = fetchAvatar(u, Enum.ThumbnailSize.Size150x150)
+				if av.Parent then av.Image = url end
+			end)
+		end,
+		GetImage = function() return av end
+	}
 end
 
 function Section:CreateImage(opts)
